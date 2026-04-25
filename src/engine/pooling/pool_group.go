@@ -36,7 +36,11 @@
 
 package pooling
 
-import "sync"
+import (
+	"sync"
+
+	"kaijuengine.com/platform/concurrent"
+)
 
 type PoolGroupId = int
 
@@ -139,6 +143,15 @@ func (p *PoolGroup[T]) Each(each func(elm *T)) {
 			each(&p.pools[i].elements[p.pools[i].taken[j]])
 		}
 	}
+}
+
+func (p *PoolGroup[T]) EachParallel(workName string, workGroup *concurrent.WorkGroup, threads *concurrent.Threads, each func(elm *T)) {
+	for i := range p.pools {
+		for j := range p.pools[i].takenLen {
+			workGroup.Add(workName, func() { each(&p.pools[i].elements[p.pools[i].taken[j]]) })
+		}
+	}
+	workGroup.Execute(workName, threads)
 }
 
 // ConditionalEach iterates over each active element in the pool group, invoking the

@@ -185,10 +185,20 @@ func (v Vec3) Negative() Vec3 {
 	return Vec3{-v[Vx], -v[Vy], -v[Vz]}
 }
 
-func (v *Vec3) Inverse() {
+func (v *Vec3) NegativeAssign() {
 	v[Vx] = -v[Vx]
 	v[Vy] = -v[Vy]
 	v[Vz] = -v[Vz]
+}
+
+func (v Vec3) Inverse() Vec3 {
+	return Vec3{1 / v[Vx], 1 / v[Vy], 1 / v[Vz]}
+}
+
+func (v *Vec3) InverseAssign() {
+	v[Vx] = 1 / v[Vx]
+	v[Vy] = 1 / v[Vy]
+	v[Vz] = 1 / v[Vz]
 }
 
 func Vec3Cross(v, other Vec3) Vec3 {

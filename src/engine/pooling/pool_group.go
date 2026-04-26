@@ -39,10 +39,12 @@ package pooling
 import (
 	"sync"
 
+	"kaijuengine.com/build"
 	"kaijuengine.com/platform/concurrent"
 )
 
-type PoolGroupId = int
+type PoolGroupId = int // This is actually just 3 bytes
+const MaxPoolGroupId = 0x00FFFFFF
 
 type PoolGroup[T any] struct {
 	pools []*Pool[T]
@@ -68,6 +70,11 @@ func (p *PoolGroup[T]) selectPool() (*Pool[T], PoolGroupId) {
 	p.pools = append(p.pools, &Pool[T]{})
 	last := len(p.pools) - 1
 	p.pools[last].init()
+	if build.Debug {
+		if len(p.pools) > MaxPoolGroupId {
+			panic("the pool amount has gone beyond the allowed limit")
+		}
+	}
 	return p.pools[last], last
 }
 
@@ -121,6 +128,11 @@ func (p *PoolGroup[T]) Reserve(additionalElements int) {
 	for range addPools {
 		p.pools = append(p.pools, &Pool[T]{})
 		p.pools[len(p.pools)-1].init()
+	}
+	if build.Debug {
+		if len(p.pools) > MaxPoolGroupId {
+			panic("the pool amount has gone beyond the allowed limit")
+		}
 	}
 }
 

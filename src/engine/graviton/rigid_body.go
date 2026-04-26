@@ -38,11 +38,11 @@ type Mass struct {
 }
 
 type CollisionInfo struct {
-	Shape          Shape
-	LocalAABB      AABB
-	CollisionGroup int
-	CollisionMask  int
-	IsTrigger      bool
+	Shape     Shape
+	LocalAABB AABB
+	Group     int
+	Mask      int
+	IsTrigger bool
 }
 
 type SimulationState struct {
@@ -54,6 +54,14 @@ type SimulationState struct {
 	IsFixedPosition bool
 }
 
+func (r *RigidBody) poolLocation() int {
+	return int(r.poolId)<<8 | int(r.id)
+}
+
+func rigidBodyLocationToIds(location int32) (pooling.PoolGroupId, pooling.PoolIndex) {
+	return pooling.PoolGroupId(location >> 8), pooling.PoolIndex(location & 0xFF)
+}
+
 func (r *RigidBody) IsStatic() bool {
 	return r.Simulation.Type == RigidBodyTypeStatic || r.Mass.Mass == 0
 }
@@ -63,4 +71,8 @@ func (r *RigidBody) SetMass(mass matrix.Float, inertia matrix.Vec3) {
 	r.Mass.inverseMass = 1.0 / mass
 	r.Mass.Inertia = inertia
 	r.Mass.inverseInertia = inertia.Inverse()
+}
+
+func (r *RigidBody) WorldAABB() AABB {
+	return AABB(r.Collision.Shape).Transform(r.Transform.WorldMatrix())
 }

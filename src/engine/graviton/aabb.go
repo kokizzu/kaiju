@@ -45,6 +45,17 @@ func AABBFromTransform(transform *matrix.Transform) AABB {
 	return NewAABB(transform.WorldPosition(), transform.WorldScale())
 }
 
+// AABBFromCorners creates an AABB from 8 corner points
+func AABBFromCorners(corners [8]matrix.Vec3) AABB {
+	min := corners[0]
+	max := corners[0]
+	for i := 1; i < 8; i++ {
+		min = matrix.Vec3Min(min, corners[i])
+		max = matrix.Vec3Max(max, corners[i])
+	}
+	return AABBFromMinMax(min, max)
+}
+
 // Union returns the union of two AABBs
 func AABBUnion(a, b AABB) AABB {
 	min := matrix.Vec3Min(a.Min(), b.Min())
@@ -338,6 +349,24 @@ func (box AABB) Corners() [8]matrix.Vec3 {
 		{max.X(), max.Y(), min.Z()},
 		max,
 	}
+}
+
+func (a AABB) Transform(m matrix.Mat4) AABB {
+	min, max := a.Min(), a.Max()
+	corners := [8]matrix.Vec3{
+		matrix.NewVec3(min.X(), min.Y(), min.Z()),
+		matrix.NewVec3(max.X(), min.Y(), min.Z()),
+		matrix.NewVec3(min.X(), max.Y(), min.Z()),
+		matrix.NewVec3(min.X(), min.Y(), max.Z()),
+		matrix.NewVec3(max.X(), max.Y(), min.Z()),
+		matrix.NewVec3(max.X(), min.Y(), max.Z()),
+		matrix.NewVec3(min.X(), max.Y(), max.Z()),
+		matrix.NewVec3(max.X(), max.Y(), max.Z()),
+	}
+	for i := range corners {
+		corners[i] = m.TransformPoint(corners[i])
+	}
+	return AABBFromCorners(corners)
 }
 
 // //////////////////////////////////////////////////////////////////////////////

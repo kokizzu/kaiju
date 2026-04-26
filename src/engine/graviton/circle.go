@@ -2,14 +2,6 @@ package graviton
 
 import "kaijuengine.com/matrix"
 
-type Axis = uint8
-
-const (
-	AxisX = Axis(iota)
-	AxisY
-	AxisZ
-)
-
 type Circle struct {
 	Point  matrix.Vec3
 	Radius matrix.Float

@@ -15,12 +15,14 @@ type System struct {
 	bodies pooling.PoolGroup[RigidBody]
 	// This is a singular vector at the moment, I'll be making
 	// multiple gravitational sources in the future
-	gravity matrix.Vec3
+	gravity    matrix.Vec3
+	broadPhase SweepPrune
 }
 
 func (s *System) Initialize() {
 	// Take the ith unit vector and scale it proportionally to standard gravity
 	s.gravity = matrix.Vec3Up().Scale(standardGravity)
+	s.broadPhase.Initialize(1024)
 }
 
 func (s *System) SetGravity(gravity matrix.Vec3) {
@@ -46,6 +48,32 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 		body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
 		ms.Acceleration = matrix.Vec3{}
 	})
-	// TODO:  Collision detection
-	// TODO:  Collision resolution
+	s.broadPhase.Rebuild(&s.bodies)
+	pairs := s.broadPhase.Sweep()
+	for _, pair := range pairs {
+		a, b := pair.BodyA, pair.BodyB
+		if a == nil || b == nil {
+			continue
+		}
+		// Skip if either is static (or both static = no collision)
+		if a.IsStatic() && b.IsStatic() {
+			continue
+		}
+		// Skip if collision groups don't match
+		if !s.canCollide(a, b) {
+			continue
+		}
+		// TODO: Narrow-phase collision detection
+		// TODO: Collision resolution
+	}
+}
+
+func (s *System) canCollide(a, b *RigidBody) bool {
+	if a.Collision.Mask&(1<<b.Collision.Group) == 0 {
+		return false
+	}
+	if b.Collision.Mask&(1<<a.Collision.Group) == 0 {
+		return false
+	}
+	return true
 }

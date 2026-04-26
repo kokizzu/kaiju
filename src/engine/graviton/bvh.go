@@ -35,10 +35,7 @@ func (item BVHItem) Bounds() AABB {
 	mat := item.Transform.WorldMatrix()
 	min := mat.TransformPoint(bounds.Min())
 	max := mat.TransformPoint(bounds.Max())
-	return AABB{
-		Center: min.Add(max).Shrink(2.0),
-		Extent: max.Subtract(min).Shrink(2.0),
-	}
+	return NewAABB(min.Add(max).Shrink(2.0), max.Subtract(min).Shrink(2.0))
 }
 
 func (item BVHItem) RayIntersect(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {
@@ -241,7 +238,7 @@ func RemoveAllLeavesMatchingTransform(world **BVH, transform *matrix.Transform) 
 
 func computeBounds(entries []HitObject) AABB {
 	if len(entries) == 0 {
-		return AABB{}
+		return NullAABB
 	}
 	b := entries[0].Bounds()
 	for i := 1; i < len(entries); i++ {

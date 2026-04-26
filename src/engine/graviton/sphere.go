@@ -5,11 +5,17 @@ import (
 	"kaijuengine.com/matrix"
 )
 
-type Sphere = Shape
+type Sphere Shape
 
-func (s *Shape) AsSphere(radius matrix.Float) {
+func (s *Shape) SetSphere(center matrix.Vec3, radius matrix.Float) {
 	s.Type = ShapeTypeSphere
 	s.Radius = radius
+}
+
+func NewSphere(center matrix.Vec3, radius matrix.Float) Sphere {
+	s := Shape{}
+	s.SetSphere(center, radius)
+	return Sphere(s)
 }
 
 func (a Sphere) Overlap(b Sphere) bool {

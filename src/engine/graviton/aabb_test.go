@@ -7,7 +7,7 @@ import (
 )
 
 func TestAABBHit(t *testing.T) {
-	box := AABB{matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5}}
+	box := NewAABB(matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5})
 	r := Ray{matrix.Vec3Right(), matrix.Vec3Left()}
 	if _, ok := box.RayHit(r); !ok {
 		t.Error("Expected hit")
@@ -35,7 +35,7 @@ func TestAABBHit(t *testing.T) {
 }
 
 func TestAABBMiss(t *testing.T) {
-	box := AABB{matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5}}
+	box := NewAABB(matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5})
 	r := Ray{matrix.Vec3Right(), matrix.Vec3Up()}
 	if _, ok := box.RayHit(r); ok {
 		t.Error("Expected miss")
@@ -59,7 +59,7 @@ func TestAABBMiss(t *testing.T) {
 }
 
 func TestTriangleIntersect(t *testing.T) {
-	box := AABB{matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5}}
+	box := NewAABB(matrix.Vec3Zero(), matrix.Vec3{0.5, 0.5, 0.5})
 	points0 := [3]matrix.Vec3{
 		{-0.25, 0.0, 0.25},
 		{0.0, 0.0, -0.25},
@@ -71,14 +71,8 @@ func TestTriangleIntersect(t *testing.T) {
 }
 
 func TestAABBUnion(t *testing.T) {
-	a := AABB{
-		Center: matrix.Vec3{1, 0, 0},
-		Extent: matrix.Vec3{1, 1, 1},
-	}
-	b := AABB{
-		Center: matrix.Vec3{0, 0, 0},
-		Extent: matrix.Vec3{2, 2, 2},
-	}
+	a := NewAABB(matrix.Vec3{1, 0, 0}, matrix.Vec3{1, 1, 1})
+	b := NewAABB(matrix.Vec3{0, 0, 0}, matrix.Vec3{2, 2, 2})
 	c := AABBUnion(a, b)
 	if !c.ContainsAABB(a) {
 		t.Fail()
@@ -95,10 +89,7 @@ func TestFrustimInAABB(t *testing.T) {
 	vp := matrix.Mat4Multiply(v, p)
 	var f Frustum
 	f.ExtractPlanes(vp)
-	b := AABB{
-		Center: matrix.Vec3Zero(),
-		Extent: matrix.Vec3{50, 50, 0},
-	}
+	b := NewAABB(matrix.Vec3Zero(), matrix.Vec3{50, 50, 0})
 	if !b.IntersectsFrustum(f) {
 		t.Fail()
 	}

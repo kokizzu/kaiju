@@ -4,30 +4,31 @@ import (
 	"kaijuengine.com/matrix"
 )
 
-type OOBB struct {
-	Center      matrix.Vec3
-	Extent      matrix.Vec3
-	Orientation matrix.Mat3
+type OOBB Shape
+
+func (s *Shape) SetOOBB(center, extent matrix.Vec3, orientation matrix.Mat3) {
+	s.Type = ShapeTypeOOBB
+	s.Center = center
+	s.Extent = extent
+	s.Orientation = orientation
 }
 
-func OBBFromAABB(aabb AABB) OOBB {
-	return OOBB{
-		Center:      aabb.Center,
-		Extent:      aabb.Extent,
-		Orientation: matrix.Mat3Identity(),
-	}
+func NewOOBB(center, extent matrix.Vec3, orientation matrix.Mat3) OOBB {
+	s := Shape{}
+	s.SetOOBB(center, extent, orientation)
+	return OOBB(s)
 }
 
-func OBBFromTransform(baseAABB AABB, transform *matrix.Transform) OOBB {
+func OOBBFromAABB(aabb AABB) OOBB {
+	return NewOOBB(aabb.Center, aabb.Extent, matrix.Mat3Identity())
+}
+
+func OOBBFromTransform(baseAABB AABB, transform *matrix.Transform) OOBB {
 	worldMat := transform.WorldMatrix()
 	center := worldMat.TransformPoint(baseAABB.Center)
 	orientation := worldMat.Mat3()
 	extent := baseAABB.Extent.Multiply(transform.WorldScale())
-	return OOBB{
-		Center:      center,
-		Extent:      extent,
-		Orientation: orientation,
-	}
+	return NewOOBB(center, extent, orientation)
 }
 
 func (o OOBB) ContainsPoint(point matrix.Vec3) bool {
@@ -72,10 +73,7 @@ func (o OOBB) RayIntersect(ray Ray, length float32) bool {
 		Origin:    localRayOrigin,
 		Direction: localRayDir,
 	}
-	localAABB := AABB{
-		Center: matrix.Vec3Zero(),
-		Extent: o.Extent,
-	}
+	localAABB := NewAABB(matrix.Vec3Zero(), o.Extent)
 	_, hit := localAABB.RayHit(localRay)
 	return hit
 }

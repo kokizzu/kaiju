@@ -22,10 +22,7 @@ func (t DetailedTriangle) Bounds() AABB {
 		min = matrix.Vec3Min(min, t.Points[i])
 		max = matrix.Vec3Max(max, t.Points[i])
 	}
-	return AABB{
-		Center: min.Add(max).Scale(0.5),
-		Extent: max.Subtract(min).Scale(0.5),
-	}
+	return NewAABB(min.Add(max).Scale(0.5), max.Subtract(min).Scale(0.5))
 }
 
 func (t DetailedTriangle) RayIntersectTest(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {

@@ -6,18 +6,25 @@ import (
 	"kaijuengine.com/matrix"
 )
 
-// AABB is an axis-aligned bounding box
-type AABB struct {
-	Center matrix.Vec3
-	Extent matrix.Vec3
+type AABB Shape
+
+var NullAABB = AABB{Type: ShapeTypeAABB}
+
+func (s *Shape) SetAABB(center, extent matrix.Vec3) {
+	s.Type = ShapeTypeAABB
+	s.Center = center
+	s.Extent = extent
+}
+
+func NewAABB(center, extent matrix.Vec3) AABB {
+	s := Shape{}
+	s.SetAABB(center, extent)
+	return AABB(s)
 }
 
 // AABBFromWidth creates an AABB from the center and half-width
 func AABBFromWidth(center matrix.Vec3, halfWidth matrix.Float) AABB {
-	return AABB{
-		Center: center,
-		Extent: matrix.Vec3{halfWidth, halfWidth, halfWidth},
-	}
+	return NewAABB(center, matrix.Vec3{halfWidth, halfWidth, halfWidth})
 }
 
 func AABBFromPoints(points []matrix.Vec3) AABB {
@@ -31,17 +38,11 @@ func AABBFromPoints(points []matrix.Vec3) AABB {
 
 // AABBFromMinMax creates an AABB from the minimum and maximum points
 func AABBFromMinMax(min, max matrix.Vec3) AABB {
-	return AABB{
-		Center: min.Add(max).Scale(0.5),
-		Extent: matrix.Vec3Abs(max.Subtract(min).Scale(0.5)),
-	}
+	return NewAABB(min.Add(max).Scale(0.5), matrix.Vec3Abs(max.Subtract(min).Scale(0.5)))
 }
 
 func AABBFromTransform(transform *matrix.Transform) AABB {
-	return AABB{
-		Center: transform.WorldPosition(),
-		Extent: transform.WorldScale(),
-	}
+	return NewAABB(transform.WorldPosition(), transform.WorldScale())
 }
 
 // Union returns the union of two AABBs
@@ -290,7 +291,7 @@ func (box *AABB) FromTriangle(triangle DetailedTriangle) AABB {
 		triangle.Points[1], triangle.Points[2])
 	mid := tMax.Add(tMin).Scale(0.5)
 	e := tMax.Subtract(mid)
-	return AABB{mid, e}
+	return NewAABB(mid, e)
 }
 
 // IntersectsFrustum returns whether the AABB is in the frustum
@@ -348,10 +349,7 @@ func (box AABB) RayIntersectTest(ray Ray, length float32, transform *matrix.Tran
 	mat := transform.WorldMatrix()
 	min := mat.TransformPoint(box.Min())
 	max := mat.TransformPoint(box.Max())
-	tBox := AABB{
-		Center: min.Add(max).Shrink(2.0),
-		Extent: max.Subtract(min).Shrink(2.0),
-	}
+	tBox := NewAABB(min.Add(max).Shrink(2.0), max.Subtract(min).Shrink(2.0))
 	pt, ok := tBox.RayHit(ray)
 	if ray.Origin.Distance(pt) > length {
 		return matrix.Vec3{}, false

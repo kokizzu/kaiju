@@ -51,10 +51,7 @@ func OctreeForMesh(mesh []matrix.Vec3) *Octree {
 }
 
 func (o *Octree) AsAABB() AABB {
-	return AABB{
-		Center: o.Center,
-		Extent: matrix.Vec3{o.HalfWidth, o.HalfWidth, o.HalfWidth},
-	}
+	return NewAABB(o.Center, matrix.Vec3{o.HalfWidth, o.HalfWidth, o.HalfWidth})
 }
 
 func (node *Octree) Insert(obj HitObject) {

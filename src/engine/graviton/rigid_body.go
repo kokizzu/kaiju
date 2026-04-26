@@ -58,10 +58,6 @@ func (r *RigidBody) poolLocation() int {
 	return int(r.poolId)<<8 | int(r.id)
 }
 
-func rigidBodyLocationToIds(location int32) (pooling.PoolGroupId, pooling.PoolIndex) {
-	return pooling.PoolGroupId(location >> 8), pooling.PoolIndex(location & 0xFF)
-}
-
 func (r *RigidBody) IsStatic() bool {
 	return r.Simulation.Type == RigidBodyTypeStatic || r.Mass.Mass == 0
 }

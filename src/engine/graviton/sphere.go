@@ -115,3 +115,65 @@ func (s Sphere) IntersectsFrustum(f Frustum) bool {
 	}
 	return true
 }
+
+func (s Sphere) IntersectsCone(c Cone) bool {
+	dir := s.Center.Subtract(c.Center)
+	t := matrix.Vec3Dot(dir, c.Direction)
+	halfH := c.Height / 2
+	if t < -halfH {
+		t = -halfH
+	} else if t > halfH {
+		t = halfH
+	}
+	ratio := (t + halfH) / c.Height
+	radiusAtH := c.Radius * ratio
+	axisPt := c.Center.Add(c.Direction.Scale(t))
+	closest := axisPt
+	if radiusAtH > 0 {
+		perp := dir.Subtract(c.Direction.Scale(t))
+		perpLen := perp.Length()
+		if perpLen > radiusAtH {
+			closest = axisPt.Add(perp.Scale(radiusAtH / perpLen))
+		}
+	}
+	distSq := s.Center.Subtract(closest).LengthSquared()
+	return distSq <= s.Radius*s.Radius
+}
+
+func (s Sphere) IntersectsCapsule(c Capsule) bool {
+	halfH := c.Height / 2
+	a1 := c.Center.Subtract(c.Direction.Scale(halfH))
+	a2 := c.Center.Add(c.Direction.Scale(halfH))
+	seg := a2.Subtract(a1)
+	toCenter := s.Center.Subtract(a1)
+	t := matrix.Vec3Dot(toCenter, seg) / matrix.Vec3Dot(seg, seg)
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	closest := a1.Add(seg.Scale(t))
+	distSq := s.Center.Subtract(closest).LengthSquared()
+	rSum := s.Radius + c.Radius
+	return distSq <= rSum*rSum
+}
+
+func (s Sphere) IntersectsCylinder(c Cylinder) bool {
+	dir := s.Center.Subtract(c.Center)
+	t := matrix.Vec3Dot(dir, c.Direction)
+	halfH := c.Height / 2
+	if t < -halfH {
+		t = -halfH
+	} else if t > halfH {
+		t = halfH
+	}
+	axisPt := c.Center.Add(c.Direction.Scale(t))
+	perp := dir.Subtract(c.Direction.Scale(t))
+	perpLen := perp.Length()
+	closest := axisPt
+	if perpLen > c.Radius {
+		closest = axisPt.Add(perp.Scale(c.Radius / perpLen))
+	}
+	distSq := s.Center.Subtract(closest).LengthSquared()
+	return distSq <= s.Radius*s.Radius
+}

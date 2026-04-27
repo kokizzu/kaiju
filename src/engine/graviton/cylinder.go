@@ -1,6 +1,10 @@
 package graviton
 
-import "kaijuengine.com/matrix"
+import (
+	"math"
+
+	"kaijuengine.com/matrix"
+)
 
 type Cylinder Shape
 
@@ -344,4 +348,66 @@ func (s Cylinder) IntersectsFrustum(f Frustum) bool {
 		}
 	}
 	return true
+}
+
+func (s Cylinder) IntersectsSphere(c Sphere) bool {
+	return c.IntersectsCylinder(s)
+}
+
+func (s Cylinder) IntersectsCapsule(c Capsule) bool {
+	return c.IntersectsCylinder(s)
+}
+
+func (s Cylinder) IntersectsCone(c Cone) bool {
+	aBound := matrix.Sqrt(s.Radius*s.Radius + (s.Height/2)*(s.Height/2))
+	bBound := matrix.Sqrt(c.Radius*c.Radius + (c.Height/2)*(c.Height/2))
+	centerDiff := s.Center.Subtract(c.Center)
+	if matrix.Vec3Dot(centerDiff, centerDiff) > (aBound+bBound)*(aBound+bBound) {
+		return false
+	}
+	coneApex := c.Center.Subtract(c.Direction.Scale(c.Height / 2))
+	coneBase := c.Center.Add(c.Direction.Scale(c.Height / 2))
+	if pointInCylinder(coneApex, s) || pointInCylinder(coneBase, s) {
+		return true
+	}
+	cylBottom := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
+	cylTop := s.Center.Add(s.Direction.Scale(s.Height / 2))
+	if pointInCone(cylBottom, c) || pointInCone(cylTop, c) {
+		return true
+	}
+	if pointInCone(s.Center, c) {
+		return true
+	}
+	for i := matrix.Float(0); i <= 1; i += matrix.Float(0.25) {
+		pt := s.Center.Add(s.Direction.Scale((i - matrix.Float(0.5)) * s.Height))
+		if pointInCone(pt, c) {
+			return true
+		}
+	}
+	steps := 8
+	for i := 0; i < steps; i++ {
+		angle := matrix.Float(i) * 2 * matrix.Float(math.Pi) / matrix.Float(steps)
+		cosA := matrix.Cos(angle)
+		sinA := matrix.Sin(angle)
+		perpX := matrix.Vec3Right()
+		dot := matrix.Vec3Dot(perpX, c.Direction)
+		if matrix.Abs(dot) > matrix.Float(0.9) {
+			perpX = matrix.Vec3Up()
+		}
+		perpX = perpX.Subtract(c.Direction.Scale(matrix.Vec3Dot(perpX, c.Direction)))
+		perpX = perpX.Scale(matrix.Float(1) / perpX.Length())
+		perpY := matrix.Vec3Cross(c.Direction, perpX)
+		pt := coneBase.Add(perpX.Scale(c.Radius * cosA)).Add(perpY.Scale(c.Radius * sinA))
+		if pointInCylinder(pt, s) {
+			return true
+		}
+	}
+	for i := matrix.Float(0); i <= 1; i += matrix.Float(0.25) {
+		t := (i - matrix.Float(0.5)) * c.Height
+		pt := c.Center.Add(c.Direction.Scale(t))
+		if pointInCylinder(pt, s) {
+			return true
+		}
+	}
+	return false
 }

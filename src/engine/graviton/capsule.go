@@ -294,3 +294,284 @@ func (s Capsule) IntersectsFrustum(f Frustum) bool {
 	}
 	return true
 }
+
+func (s Capsule) IntersectsSphere(c Sphere) bool {
+	return c.IntersectsCapsule(s)
+}
+
+func (s Capsule) IntersectsCone(c Cone) bool {
+	aBound := matrix.Sqrt(s.Radius*s.Radius + (s.Height/2)*(s.Height/2))
+	cBound := matrix.Sqrt(c.Radius*c.Radius + (c.Height/2)*(c.Height/2))
+	if s.Center.Subtract(c.Center).LengthSquared() > (aBound+cBound)*(aBound+cBound) {
+		return false
+	}
+	halfH := s.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(halfH))
+	a2 := s.Center.Add(s.Direction.Scale(halfH))
+	if pointInCone(a1, c) || pointInCone(a2, c) {
+		return true
+	}
+	coneApex := c.Center.Subtract(c.Direction.Scale(c.Height / 2))
+	coneBase := c.Center.Add(c.Direction.Scale(c.Height / 2))
+	if capsuleContainsPoint(a1, a2, s.Radius, coneApex) || capsuleContainsPoint(a1, a2, s.Radius, coneBase) {
+		return true
+	}
+	if capsuleSpineVsConeAxis(s, c) {
+		return true
+	}
+	if capsuleSpinePenetratesCone(s, c) {
+		return true
+	}
+	if coneBaseCircleVsCapsule(s, c) {
+		return true
+	}
+	return false
+}
+
+func (s Capsule) IntersectsCylinder(c Cylinder) bool {
+	aBound := matrix.Sqrt(s.Radius*s.Radius + (s.Height/2)*(s.Height/2))
+	cBound := matrix.Sqrt(c.Radius*c.Radius + (c.Height/2)*(c.Height/2))
+	if s.Center.Subtract(c.Center).LengthSquared() > (aBound+cBound)*(aBound+cBound) {
+		return false
+	}
+	halfH := s.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(halfH))
+	a2 := s.Center.Add(s.Direction.Scale(halfH))
+	if pointInCylinder(a1, c) || pointInCylinder(a2, c) {
+		return true
+	}
+	cylBottom := c.Center.Subtract(c.Direction.Scale(c.Height / 2))
+	cylTop := c.Center.Add(c.Direction.Scale(c.Height / 2))
+	if capsuleContainsPoint(a1, a2, s.Radius, cylBottom) || capsuleContainsPoint(a1, a2, s.Radius, cylTop) {
+		return true
+	}
+	if capsuleSpineVsCylinderAxis(s, c) {
+		return true
+	}
+	if capsuleSpinePenetratesCylinder(s, c) {
+		return true
+	}
+	if cylinderEdgeCircleVsCapsule(s, c) {
+		return true
+	}
+	return false
+}
+
+func pointInCylinder(p matrix.Vec3, c Cylinder) bool {
+	dir := p.Subtract(c.Center)
+	t := dir.Dot(c.Direction)
+	halfH := c.Height / 2
+	if t < -halfH || t > halfH {
+		return false
+	}
+	perp := dir.Subtract(c.Direction.Scale(t))
+	return perp.LengthSquared() <= c.Radius*c.Radius
+}
+
+func capsuleSpineVsCylinderAxis(s Capsule, c Cylinder) bool {
+	halfHC := c.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
+	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
+	cylBottom := c.Center.Subtract(c.Direction.Scale(halfHC))
+	cylTop := c.Center.Add(c.Direction.Scale(halfHC))
+
+	d := a2.Subtract(a1)
+	e := cylTop.Subtract(cylBottom)
+	r := a1.Subtract(cylBottom)
+	A := d.Dot(d)
+	D := d.Dot(e)
+	E := e.Dot(e)
+	denom := A*E - D*D
+
+	var segS, segT matrix.Float
+	if denom < 1 {
+		segS = 0
+		segT = 0
+	} else {
+		B := d.Dot(r)
+		F := e.Dot(r)
+		segS = (B*E - D*F) / denom
+		segT = (A*F - D*B) / denom
+		if segS < 0 {
+			segS = 0
+			segT = min(max(-F/E, 0), 1)
+		} else if segS > 1 {
+			segS = 1
+			segT = min(max((F-D)/E, 0), 1)
+		} else {
+			segT = min(max(segT, 0), 1)
+		}
+	}
+
+	closest := r.Add(d.Scale(segS)).Add(e.Scale(segT))
+	distSq := closest.Dot(closest)
+	rSum := s.Radius + c.Radius
+	if distSq <= rSum*rSum {
+		return true
+	}
+	return false
+}
+
+func capsuleSpinePenetratesCylinder(s Capsule, c Cylinder) bool {
+	halfHC := c.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
+	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
+	spine := a2.Subtract(a1)
+
+	for i := 0; i <= 11; i++ {
+		t := matrix.Float(i) / 10
+		pt := a1.Add(spine.Scale(t))
+		diff := pt.Subtract(c.Center)
+		h := diff.Dot(c.Direction)
+		h = min(max(h, -halfHC), halfHC)
+		axisPt := c.Center.Add(c.Direction.Scale(h))
+		perp := pt.Subtract(axisPt)
+		distToAxis := perp.Length()
+		if distToAxis > c.Radius {
+			distToSurface := distToAxis - c.Radius
+			if distToSurface <= s.Radius {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cylinderEdgeCircleVsCapsule(s Capsule, c Cylinder) bool {
+	halfH := s.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(halfH))
+	a2 := s.Center.Add(s.Direction.Scale(halfH))
+
+	for _, sign := range []matrix.Float{-1, 1} {
+		ringCenter := c.Center.Add(c.Direction.Scale(sign * c.Height / 2))
+		perpX := c.Direction.Orthogonal()
+		perpY := matrix.Vec3Cross(c.Direction, perpX).Normal()
+
+		for i := 0; i < 16; i++ {
+			angle := matrix.Float(i) * matrix.Float(6.283185307179586) / 16
+			pt := ringCenter.Add(perpX.Scale(c.Radius * matrix.Cos(angle))).Add(perpY.Scale(c.Radius * matrix.Sin(angle)))
+			seg := a2.Subtract(a1)
+			segLenSq := seg.Dot(seg)
+			toPt := pt.Subtract(a1)
+			var t matrix.Float
+			if segLenSq > 0 {
+				t = toPt.Dot(seg) / segLenSq
+			}
+			t = min(max(t, matrix.Float(0)), matrix.Float(1))
+			closest := a1.Add(seg.Scale(t))
+			if pt.Subtract(closest).LengthSquared() <= s.Radius*s.Radius {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func capsuleContainsPoint(a1, a2 matrix.Vec3, radius matrix.Float, p matrix.Vec3) bool {
+	seg := a2.Subtract(a1)
+	segLenSq := seg.Dot(seg)
+	toP := p.Subtract(a1)
+	var t matrix.Float
+	if segLenSq > 0 {
+		t = toP.Dot(seg) / segLenSq
+	}
+	t = min(max(t, matrix.Float(0)), matrix.Float(1))
+	closest := a1.Add(seg.Scale(t))
+	return p.Subtract(closest).LengthSquared() <= radius*radius
+}
+
+func capsuleSpineVsConeAxis(s Capsule, c Cone) bool {
+	halfHC := c.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
+	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
+	coneApex := c.Center.Subtract(c.Direction.Scale(halfHC))
+	coneBase := c.Center.Add(c.Direction.Scale(halfHC))
+	d := a2.Subtract(a1)
+	e := coneBase.Subtract(coneApex)
+	r := a1.Subtract(coneApex)
+	A := d.Dot(d)
+	D := d.Dot(e)
+	E := e.Dot(e)
+	denom := A*E - D*D
+	var segS, segT matrix.Float
+	if denom < 1 {
+		segS = 0
+		segT = 0
+	} else {
+		B := d.Dot(r)
+		F := e.Dot(r)
+		segS = (B*E - D*F) / denom
+		segT = (A*F - D*B) / denom
+		if segS < 0 {
+			segS = 0
+			segT = min(max(-F/E, 0), 1)
+		} else if segS > 1 {
+			segS = 1
+			segT = min(max((F-D)/E, 0), 1)
+		} else {
+			segT = min(max(segT, 0), 1)
+		}
+	}
+	closest := r.Add(d.Scale(segS)).Add(e.Scale(segT))
+	distSq := closest.Dot(closest)
+	ratio := min(max(segT, matrix.Float(0)), matrix.Float(1))
+	radiusAtH := c.Radius * ratio
+	if distSq <= (s.Radius+radiusAtH)*(s.Radius+radiusAtH) {
+		return true
+	}
+	return false
+}
+
+func capsuleSpinePenetratesCone(s Capsule, c Cone) bool {
+	halfHC := c.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
+	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
+	spine := a2.Subtract(a1)
+
+	for i := 0; i <= 11; i++ {
+		t := matrix.Float(i) / 10
+		pt := a1.Add(spine.Scale(t))
+		diff := pt.Subtract(c.Center)
+		h := diff.Dot(c.Direction)
+		h = min(max(h, -halfHC), halfHC)
+		ratio := (h + halfHC) / c.Height
+		radiusAtH := c.Radius * ratio
+		axisPt := c.Center.Add(c.Direction.Scale(h))
+		perp := pt.Subtract(axisPt)
+		distToAxis := perp.Length()
+		if distToAxis > radiusAtH {
+			distToSurface := distToAxis - radiusAtH
+			if distToSurface <= s.Radius {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func coneBaseCircleVsCapsule(s Capsule, c Cone) bool {
+	halfH := s.Height / 2
+	a1 := s.Center.Subtract(s.Direction.Scale(halfH))
+	a2 := s.Center.Add(s.Direction.Scale(halfH))
+	coneBase := c.Center.Add(c.Direction.Scale(c.Height / 2))
+	perpX := c.Direction.Orthogonal()
+	perpY := matrix.Vec3Cross(c.Direction, perpX).Normal()
+
+	for i := 0; i < 16; i++ {
+		angle := matrix.Float(i) * matrix.Float(6.283185307179586) / 16
+		pt := coneBase.Add(perpX.Scale(c.Radius * matrix.Cos(angle))).Add(perpY.Scale(c.Radius * matrix.Sin(angle)))
+		seg := a2.Subtract(a1)
+		segLenSq := seg.Dot(seg)
+		toPt := pt.Subtract(a1)
+		var t matrix.Float
+		if segLenSq > 0 {
+			t = toPt.Dot(seg) / segLenSq
+		}
+		t = min(max(t, matrix.Float(0)), matrix.Float(1))
+		closest := a1.Add(seg.Scale(t))
+		if pt.Subtract(closest).LengthSquared() <= s.Radius*s.Radius {
+			return true
+		}
+	}
+	return false
+}

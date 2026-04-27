@@ -18,7 +18,7 @@ func NewSphere(center matrix.Vec3, radius matrix.Float) Sphere {
 	return Sphere(s)
 }
 
-func (a Sphere) Overlap(b Sphere) bool {
+func (a Sphere) IntersectsSphere(b Sphere) bool {
 	distSq := a.Center.SquareDistance(b.Center)
 	radiusSum := a.Radius + b.Radius
 	radiusSumSq := radiusSum * radiusSum

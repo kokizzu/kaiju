@@ -55,11 +55,9 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 		if a == nil || b == nil {
 			continue
 		}
-		// Skip if either is static (or both static = no collision)
 		if a.IsStatic() && b.IsStatic() {
 			continue
 		}
-		// Skip if collision groups don't match
 		if !s.canCollide(a, b) {
 			continue
 		}

@@ -15,9 +15,11 @@ const (
 )
 
 type Shape struct {
-	Center      matrix.Vec3  // Circle, AABB, OOBB
-	Radius      matrix.Float // Circle
+	Center      matrix.Vec3  // Circle, AABB, OOBB, Capsule, Cylinder, Cone
+	Radius      matrix.Float // Circle, Capsule, Cylinder, Cone
 	Extent      matrix.Vec3  // AABB, OOBB
 	Orientation matrix.Mat3  // OOBB
+	Height      matrix.Float // Capsule, Cylinder, Cone
+	Direction   matrix.Vec3  // Capsule, Cylinder, Cone
 	Type        ShapeType
 }

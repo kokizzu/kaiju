@@ -321,22 +321,28 @@ func (c *Cache) ChangeGuid(from, to string, pfs *project_file_system.FileSystem)
 	if _, ok := c.lookup[to]; ok {
 		return DuplicateIdError{Id: to}
 	}
-	// Read the current cached content
-	cc, err := c.Read(from)
-	if err != nil {
+
+	// Read the current cached content without calling Read (re-locks)
+	idx, ok := c.lookup[from]
+	if !ok {
+		err := NotInCacheError{Id: from}
 		slog.Error("failed to read cached content for guid change", "from", from, "to", to, "error", err)
 		return err
 	}
+	cc := c.cache[idx]
+
 	// Build new paths with the new id
 	dir := filepath.Dir(cc.Path)
 	newConfigPath := filepath.Join(dir, to) + filepath.Ext(cc.Path)
 	oldContentPath := cc.ContentPath()
 	newContentPath := ToContentPath(newConfigPath)
+
 	// Rename the config file
 	if err := pfs.Rename(cc.Path, newConfigPath); err != nil {
 		slog.Error("failed to rename config file", "from", cc.Path, "to", newConfigPath, "error", err)
 		return err
 	}
+
 	// Rename the content file
 	if err := pfs.Rename(oldContentPath, newContentPath); err != nil {
 		slog.Error("failed to rename content file", "from", oldContentPath, "to", newContentPath, "error", err)
@@ -346,9 +352,11 @@ func (c *Cache) ChangeGuid(from, to string, pfs *project_file_system.FileSystem)
 		}
 		return err
 	}
-	// Update the cache, remove old and add new
-	c.Remove(from)
+
+	// Update the cache inline without methods that re-lock
+	delete(c.lookup, from)
 	cc.Path = newConfigPath
-	c.IndexCachedContent(cc)
+	c.cache[idx] = cc
+	c.lookup[to] = idx
 	return nil
 }

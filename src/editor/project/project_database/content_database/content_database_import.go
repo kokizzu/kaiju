@@ -108,7 +108,7 @@ func (r *ImportResult) generateUniqueFileId(fs *project_file_system.FileSystem, 
 		ext = "." + ext
 	}
 	for {
-		r.Id = uuid.NewString() + ext
+		r.Id = uuid.Must(uuid.NewV7()).String() + ext
 		if _, err := fs.Stat(r.ContentPath().String()); err == nil {
 			continue
 		}
@@ -190,3 +190,4 @@ func reimportByNameMatching(cat ContentCategory, id string, cache *Cache, fs *pr
 		Name: cc.Config.SrcName,
 	}
 }
+

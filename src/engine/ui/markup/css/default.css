@@ -86,7 +86,6 @@ dfn {
 }
 div {
 	display: block;
-	width: 100%;
 }
 dl {
 	display: block;
@@ -397,7 +396,7 @@ ul {
 	padding-left: 40px;
 }
 var {
-	font-style: italic; 
+	font-style: italic;
 }
 button, .button {
 	padding: 2px 5px 2px 5px;

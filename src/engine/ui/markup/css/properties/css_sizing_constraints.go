@@ -53,7 +53,7 @@ type cssSizingConstraints struct {
 }
 
 func (c cssSizingConstraints) HasMinWidth() bool {
-	return c.MinWidth >= 0
+	return c.MinWidth > 0
 }
 
 func (c cssSizingConstraints) HasMaxWidth() bool {
@@ -61,7 +61,7 @@ func (c cssSizingConstraints) HasMaxWidth() bool {
 }
 
 func (c cssSizingConstraints) HasMinHeight() bool {
-	return c.MinHeight >= 0
+	return c.MinHeight > 0
 }
 
 func (c cssSizingConstraints) HasMaxHeight() bool {
@@ -104,7 +104,7 @@ func enableMaxWidth(panel *ui.Panel, v float32) {
 }
 
 func disableMaxWidth(panel *ui.Panel) {
-	panel.SetMaxWidth(0)
+	panel.SetMaxWidth(-1)
 }
 
 func enableMinHeight(panel *ui.Panel, v float32) {
@@ -120,7 +120,7 @@ func enableMaxHeight(panel *ui.Panel, v float32) {
 }
 
 func disableMaxHeight(panel *ui.Panel) {
-	panel.SetMaxHeight(0)
+	panel.SetMaxHeight(-1)
 }
 
 func enableAspectRatio(panel *ui.Panel, ratio float32) {

@@ -115,7 +115,7 @@ func Import(path string, fs *project_file_system.FileSystem, cache *Cache, linke
 	dependencyMap := map[string][]ImportResult{}
 	for i := range proc.Variants {
 		res[i].Category = cat
-		res[i].generateUniqueFileId(fs)
+		res[i].generateUniqueFileId(fs, filepath.Ext(path))
 		if useLinkedId && linkedId == "" {
 			linkedId = res[i].Id
 		}

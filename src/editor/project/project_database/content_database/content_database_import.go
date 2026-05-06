@@ -101,10 +101,14 @@ func (r *ImportResult) ConfigPath() project_file_system.ConfigPath {
 	return r.ContentPath().ToConfigPath()
 }
 
-func (r *ImportResult) generateUniqueFileId(fs *project_file_system.FileSystem) string {
+func (r *ImportResult) generateUniqueFileId(fs *project_file_system.FileSystem, ext string) string {
 	defer tracing.NewRegion("ImportResult.generateUniqueFileId").End()
+	ext = strings.TrimSpace(ext)
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
 	for {
-		r.Id = uuid.Must(uuid.NewV7()).String()
+		r.Id = uuid.Must(uuid.NewV7()).String() + ext
 		if _, err := fs.Stat(r.ContentPath().String()); err == nil {
 			continue
 		}

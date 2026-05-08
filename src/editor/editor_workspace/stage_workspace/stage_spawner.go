@@ -287,7 +287,7 @@ func (w *StageWorkspace) spawnTexture(cc *content_database.CachedContent, point 
 	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
 	// Set the position after generating the BVH
 	e.Transform.SetPosition(point)
-	man.AddBVH(e.StageData.Bvh, &e.Transform)
+	man.AddBVH(e)
 	e.StageData.Description.Textures = []string{cc.Id()}
 	if w.stageView.IsView3D() {
 		e.StageData.ShaderData = &shader_data_registry.ShaderDataStandard{
@@ -361,7 +361,7 @@ func (w *StageWorkspace) spawnMesh(cc *content_database.CachedContent, point mat
 	if missingBVH {
 		content_database.SaveMeshBVHInBackground(km, path, w.ed.ProjectFileSystem(), cc.Id())
 	}
-	man.AddBVH(e.StageData.Bvh, &e.Transform)
+	man.AddBVH(e)
 	man.RefitBVH(e)
 	e.StageData.ShaderData = &shader_data_registry.ShaderDataStandard{
 		ShaderDataBase: rendering.NewShaderDataBase(),

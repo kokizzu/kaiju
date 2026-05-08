@@ -93,6 +93,7 @@ type StageManager struct {
 // like content linkage, data bindings, etc.
 type StageEntityEditorData struct {
 	Bvh                   *collision.BVH
+	WorldBvh              *collision.BVH
 	Mesh                  *rendering.Mesh
 	ShaderData            rendering.DrawInstance
 	Description           stages.EntityDescription
@@ -200,9 +201,6 @@ func (m *StageManager) AddEntityWithId(id, name string, point matrix.Vec3) *Stag
 		}
 		if e.StageData.ShaderData != nil {
 			e.StageData.ShaderData.Destroy()
-		}
-		if e.StageData.Bvh != nil {
-			collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 		}
 		se := we.Value()
 		sm.RemoveEntityBVH(se)
@@ -342,14 +340,25 @@ func (m *StageManager) Clear() {
 
 func (m *StageManager) RefitWorldBVH() {
 	defer tracing.NewRegion("StageManager.RefitWorldBVH").End()
+	for _, e := range m.entities {
+		if e.isDeleted || e.StageData.Bvh == nil {
+			continue
+		}
+		e.StageData.Bvh.Refit()
+	}
 	m.worldBVH.Refit()
 }
 
-func (m *StageManager) AddBVH(bvh *collision.BVH, transform *matrix.Transform) {
+func (m *StageManager) AddBVH(e *StageEntity) {
 	defer tracing.NewRegion("StageManager.AddBVH").End()
-	cpy := collision.CloneBVH(bvh)
-	collision.AddSubBVH(&m.worldBVH, cpy, transform)
-	m.RefitWorldBVH()
+	if e == nil || e.StageData.Bvh == nil {
+		return
+	}
+	if e.StageData.WorldBvh != nil {
+		m.RemoveEntityBVH(e)
+	}
+	e.StageData.WorldBvh = collision.AddSubBVH(&m.worldBVH,
+		e.StageData.Bvh, &e.Transform)
 }
 
 //func (m *StageManager) RemoveBVH(bvh *collision.BVH) {
@@ -359,6 +368,14 @@ func (m *StageManager) AddBVH(bvh *collision.BVH, transform *matrix.Transform) {
 
 func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
 	defer tracing.NewRegion("StageManager.RemoveBVH").End()
+	if e == nil {
+		return
+	}
+	if e.StageData.WorldBvh != nil {
+		collision.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
+		e.StageData.WorldBvh = nil
+		return
+	}
 	collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 }
 
@@ -756,7 +773,7 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 		content_database.SaveMeshBVHInBackground(km,
 			filepath.Join(rootFolder, meshFolder, meshId), fs, meshId)
 	}
-	m.AddBVH(e.StageData.Bvh, &e.Transform)
+	m.AddBVH(e)
 	host.RunOnMainThread(func() {
 		for i := range texs {
 			texs[i].DelayedCreate(host.Window.GpuInstance.PrimaryDevice())
@@ -809,18 +826,27 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 		}
 		e.Transform.Copy(t)
 	}
-	m.worldBVH.Refit()
+	m.RefitWorldBVH()
 	m.history.Clear()
 	return nil
 }
 
 func (m *StageManager) RefitBVH(entity *StageEntity) {
 	defer tracing.NewRegion("StageManager.RefitBVH").End()
-	// TODO:  It's getting a little late, but I may need to track all of the
-	// nodes that were related to each other when they were created and only
-	// update the matching ones here. For now I'm just going to update the whole
-	// tree before it gets too late.
-	m.RefitWorldBVH()
+	if entity == nil {
+		return
+	}
+	for _, e := range explodeEntityHierarchy(entity) {
+		if e.isDeleted || e.StageData.Bvh == nil {
+			continue
+		}
+		if e.StageData.WorldBvh == nil {
+			m.AddBVH(e)
+			continue
+		}
+		e.StageData.Bvh.Refit()
+		e.StageData.WorldBvh.RefitUpwards()
+	}
 }
 
 func explodeEntityHierarchy(e *StageEntity) []*StageEntity {

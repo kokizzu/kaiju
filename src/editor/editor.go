@@ -68,6 +68,7 @@ import (
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/hid"
 	"kaijuengine.com/platform/profiler/tracing"
+	"kaijuengine.com/rendering"
 )
 
 // Editor is the entry point structure for the entire editor. It acts as the
@@ -208,6 +209,8 @@ func (ed *Editor) postProjectLoad() {
 		}
 		ed.plugins = append(ed.plugins, v)
 	}
+	// Pre-warm the, quite large, material icons PNG file
+	ed.host.TextureCache().Texture("MaterialIcons-Regular.png", rendering.TextureFilterLinear)
 }
 
 func (ed *Editor) update(deltaTime float64) {

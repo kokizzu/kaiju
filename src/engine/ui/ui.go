@@ -37,6 +37,7 @@
 package ui
 
 import (
+	"log/slog"
 	"weak"
 
 	"kaijuengine.com/engine"
@@ -645,7 +646,13 @@ func (ui *UI) Clone(parent *engine.Entity) *UI {
 			s, _ := tData.spriteSheet.ToJson()
 			cpy.ToImage().InitSpriteSheet(tData.fps, ui.ToPanel().Background(), s)
 		} else {
-			cpy.ToImage().Init(tData.flipBook[0])
+			bg := ui.ToPanel().Background()
+			if bg != nil {
+				cpy.ToImage().Init(bg)
+			} else {
+				slog.Error("failed to clone image UI: no texture source was available")
+				cpy.ToImage().Init(nil)
+			}
 		}
 	case ElementTypeInput:
 		t := ui.ToInput()

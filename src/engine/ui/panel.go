@@ -694,10 +694,10 @@ func (p *Panel) ResetScroll() {
 }
 
 func (p *Panel) ensureBGExists(tex *rendering.Texture) {
-	defer tracing.NewRegion("Panel.ensureBGExists").End()
 	pd := p.PanelData()
 	host := p.man.Value().Host
 	if !pd.drawing.IsValid() {
+		defer tracing.NewRegion("Panel.ensureBGExists").End()
 		if tex == nil {
 			tex, _ = host.TextureCache().Texture(
 				assets.TextureSquare, rendering.TextureFilterLinear)
@@ -1181,7 +1181,6 @@ func (p *Panel) SetBorderColor(left, top, right, bottom matrix.Color) {
 }
 
 func (p *Panel) SetUseBlending(useBlending bool) {
-	defer tracing.NewRegion("Panel.SetUseBlending").End()
 	p.recreateDrawing()
 	pd := p.PanelData()
 	host := p.man.Value().Host

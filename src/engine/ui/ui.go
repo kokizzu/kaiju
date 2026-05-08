@@ -347,12 +347,10 @@ func (ui *UI) GenerateScissor() {
 }
 
 func (ui *UI) setScissor(scissor matrix.Vec4) {
-	defer tracing.NewRegion("UI.setScissor").End()
 	ui.setScissorInternal(scissor)
 }
 
 func (ui *UI) setScissorInternal(scissor matrix.Vec4) {
-	defer tracing.NewRegion("UI.setScissorInternal").End()
 	if ui.shaderData.Scissor.Equals(scissor) {
 		return
 	}

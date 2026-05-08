@@ -92,6 +92,7 @@ func NewDrawings() Drawings {
 func (d *Drawings) HasDrawings() bool { return len(d.renderPassGroups) > 0 }
 
 func (d *Drawings) matchGroup(sd *ShaderDraw, dg *Drawing) int {
+	defer tracing.NewRegion("Drawings.matchGroup").End()
 	idx := -1
 	for i := 0; i < len(sd.instanceGroups) && idx < 0; i++ {
 		g := &sd.instanceGroups[i]
@@ -104,6 +105,7 @@ func (d *Drawings) matchGroup(sd *ShaderDraw, dg *Drawing) int {
 }
 
 func (d *RenderPassGroup) findShaderDraw(material *Material) (*ShaderDraw, bool) {
+	defer tracing.NewRegion("Drawings.RenderPassGroup").End()
 	rootMat := material
 	if rootMat.Root.Value() != nil {
 		rootMat = rootMat.Root.Value()
@@ -121,6 +123,7 @@ func (d *RenderPassGroup) findShaderDraw(material *Material) (*ShaderDraw, bool)
 }
 
 func (d *Drawings) findRenderPassGroup(renderPass *RenderPass) (*RenderPassGroup, bool) {
+	defer tracing.NewRegion("Drawings.findRenderPassGroup").End()
 	for i := range d.renderPassGroups {
 		if d.renderPassGroups[i].renderPass == renderPass {
 			return &d.renderPassGroups[i], true
@@ -130,6 +133,7 @@ func (d *Drawings) findRenderPassGroup(renderPass *RenderPass) (*RenderPassGroup
 }
 
 func (d *Drawings) addToRenderPassGroup(drawing *Drawing, rpGroup *RenderPassGroup) {
+	defer tracing.NewRegion("Drawings.addToRenderPassGroup").End()
 	draw, ok := rpGroup.findShaderDraw(drawing.Material)
 	if !ok {
 		newDraw := NewShaderDraw(drawing.Material)
@@ -241,6 +245,7 @@ func (d *Drawings) Render(device *GPUDevice, lights LightsForRender) {
 }
 
 func (d *Drawings) Destroy(device *GPUDevice) {
+	defer tracing.NewRegion("Drawings.Destroy").End()
 	for i := range d.renderPassGroups {
 		for j := range d.renderPassGroups[i].draws {
 			d.renderPassGroups[i].draws[j].Destroy(device)
@@ -251,6 +256,7 @@ func (d *Drawings) Destroy(device *GPUDevice) {
 }
 
 func (d *Drawings) Clear() {
+	defer tracing.NewRegion("Drawings.Clear").End()
 	for i := range d.renderPassGroups {
 		for j := range d.renderPassGroups[i].draws {
 			d.renderPassGroups[i].draws[j].Clear()

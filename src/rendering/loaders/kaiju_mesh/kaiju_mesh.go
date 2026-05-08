@@ -48,6 +48,7 @@ import (
 	"kaijuengine.com/engine/collision"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/concurrent"
+	"kaijuengine.com/platform/profiler/tracing"
 	"kaijuengine.com/rendering"
 	"kaijuengine.com/rendering/loaders/load_result"
 )
@@ -90,6 +91,7 @@ type KaijuMesh struct {
 // [KaijuMesh]. This is typically used for the editor, but games/applications
 // may find some use for it.
 func LoadedResultToKaijuMesh(res load_result.Result) []KaijuMesh {
+	defer tracing.NewRegion("kaiju_mesh.LoadedResultToKaijuMesh").End()
 	out := make([]KaijuMesh, 0, len(res.Meshes))
 	for i := range res.Meshes {
 		m := &res.Meshes[i]
@@ -115,6 +117,7 @@ func LoadedResultToKaijuMesh(res load_result.Result) []KaijuMesh {
 // Serialize will convert a [KaijuMesh] into a byte array for saving to the
 // database or later use. This serialization uses the built-in [pod.Encoder]
 func (k KaijuMesh) Serialize() ([]byte, error) {
+	defer tracing.NewRegion("KaijuMesh.Serialize").End()
 	w := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(w)
 	err := enc.Encode(k)
@@ -124,6 +127,7 @@ func (k KaijuMesh) Serialize() ([]byte, error) {
 // Deserialize will construct a [KaijuMesh] from the given array of bytes. This
 // deserialization uses the built-in [pod.Decoder]
 func Deserialize(data []byte) (KaijuMesh, error) {
+	defer tracing.NewRegion("kaiju_mesh.Deserialize").End()
 	r := bytes.NewReader(data)
 	dec := gob.NewDecoder(r)
 	var km KaijuMesh
@@ -132,6 +136,7 @@ func Deserialize(data []byte) (KaijuMesh, error) {
 }
 
 func ReadMesh(id string, host *engine.Host) (KaijuMesh, error) {
+	defer tracing.NewRegion("kaiju_mesh.ReadMesh").End()
 	data, err := host.AssetDatabase().Read(id)
 	if err != nil {
 		slog.Error("failed to read the mesh", "id", id, "error", err)
@@ -141,16 +146,19 @@ func ReadMesh(id string, host *engine.Host) (KaijuMesh, error) {
 }
 
 func (k *KaijuMesh) EnsureBVH() {
+	defer tracing.NewRegion("KaijuMesh.EnsureBVH").End()
 	if k.BVH == nil {
 		k.BVH = k.GenerateBVHArchive()
 	}
 }
 
 func (k *KaijuMesh) GenerateBVHArchive() *collision.TriangleBVH {
+	defer tracing.NewRegion("KaijuMesh.GenerateBVHArchive").End()
 	return collision.NewTriangleBVH(k.generateBVH(nil, nil, nil))
 }
 
 func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+	defer tracing.NewRegion("KaijuMesh.GenerateBVH").End()
 	if k.BVH == nil {
 		k.BVH = k.GenerateBVHArchive()
 		if k.BVH == nil {
@@ -163,11 +171,13 @@ func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.T
 }
 
 func (k KaijuMesh) generateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+	defer tracing.NewRegion("KaijuMesh.generateBVH").End()
 	tris := k.bvhTriangles(threads)
 	return collision.NewBVH(tris, transform, data)
 }
 
 func (k KaijuMesh) bvhTriangles(threads *concurrent.Threads) []collision.HitObject {
+	defer tracing.NewRegion("KaijuMesh.bvhTriangles").End()
 	tris := make([]collision.HitObject, len(k.Indexes)/3)
 	if len(tris) == 0 {
 		return tris

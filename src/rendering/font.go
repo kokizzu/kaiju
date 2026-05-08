@@ -159,9 +159,9 @@ func (cache *FontCache) nextInstanceKey(key rune) string {
 }
 
 func (cache *FontCache) requireFace(face FontFace) {
-	defer tracing.NewRegion("FontCache.requireFace").End()
 	cache.FaceMutex.RLock()
 	if _, ok := cache.fontFaces[face.string()]; !ok {
+		defer tracing.NewRegion("FontCache.requireFace").End()
 		cache.FaceMutex.RUnlock()
 		cache.FaceMutex.Lock()
 		defer cache.FaceMutex.Unlock()
@@ -570,7 +570,6 @@ func (cache *FontCache) RenderMeshes(caches RenderCaches,
 }
 
 func (cache *FontCache) MeasureString(face FontFace, text string, scale float32) float32 {
-	defer tracing.NewRegion("FontCache.MeasureString").End()
 	cache.requireFace(face)
 	x, maxX := float32(0.0), float32(0.0)
 	for _, r := range text {
@@ -586,7 +585,6 @@ func (cache *FontCache) MeasureString(face FontFace, text string, scale float32)
 }
 
 func (cache *FontCache) MeasureStringWithin(face FontFace, text string, scale, maxWidth float32, lineHeight float32) matrix.Vec2 {
-	defer tracing.NewRegion("FontCache.MeasureStringWithin").End()
 	cache.requireFace(face)
 	fontFace := cache.fontFaces[face.string()]
 	maxHeight := fontFace.metrics.LineHeight * scale

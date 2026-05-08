@@ -340,7 +340,10 @@ func (m *StageManager) Clear() {
 	m.worldBVH = nil
 }
 
-func (m *StageManager) RefitWorldBVH() { m.worldBVH.Refit() }
+func (m *StageManager) RefitWorldBVH() {
+	defer tracing.NewRegion("StageManager.RefitWorldBVH").End()
+	m.worldBVH.Refit()
+}
 
 func (m *StageManager) AddBVH(bvh *collision.BVH, transform *matrix.Transform) {
 	defer tracing.NewRegion("StageManager.AddBVH").End()
@@ -812,6 +815,7 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 }
 
 func (m *StageManager) RefitBVH(entity *StageEntity) {
+	defer tracing.NewRegion("StageManager.RefitBVH").End()
 	// TODO:  It's getting a little late, but I may need to track all of the
 	// nodes that were related to each other when they were created and only
 	// update the matching ones here. For now I'm just going to update the whole

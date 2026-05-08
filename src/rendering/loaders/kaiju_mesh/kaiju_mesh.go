@@ -115,19 +115,20 @@ func LoadedResultToKaijuMesh(res load_result.Result) []KaijuMesh {
 }
 
 // Serialize will convert a [KaijuMesh] into a byte array for saving to the
-// database or later use. This serialization uses the built-in [pod.Encoder]
+// database or later use.
 func (k KaijuMesh) Serialize() ([]byte, error) {
 	defer tracing.NewRegion("KaijuMesh.Serialize").End()
-	w := bytes.NewBuffer([]byte{})
-	enc := gob.NewEncoder(w)
-	err := enc.Encode(k)
-	return w.Bytes(), err
+	return serializeNative(k)
 }
 
 // Deserialize will construct a [KaijuMesh] from the given array of bytes. This
-// deserialization uses the built-in [pod.Decoder]
+// supports the current native mesh format and falls back to gob for legacy
+// assets.
 func Deserialize(data []byte) (KaijuMesh, error) {
 	defer tracing.NewRegion("kaiju_mesh.Deserialize").End()
+	if isNativeMesh(data) {
+		return deserializeNative(data)
+	}
 	r := bytes.NewReader(data)
 	dec := gob.NewDecoder(r)
 	var km KaijuMesh

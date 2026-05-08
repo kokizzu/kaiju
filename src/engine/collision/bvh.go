@@ -61,6 +61,14 @@ type BVHItem struct {
 	Data      any
 }
 
+type TriangleBVH struct {
+	Bounds      AABB
+	Left        *TriangleBVH
+	Right       *TriangleBVH
+	Triangle    DetailedTriangle
+	HasTriangle bool
+}
+
 func (item BVHItem) IsValid() bool { return item.HitCheck != nil }
 
 func (item BVHItem) Bounds() AABB {
@@ -136,6 +144,47 @@ func CloneBVH(bvh *BVH) *BVH {
 		}
 	}
 	return clone
+}
+
+func NewTriangleBVH(bvh *BVH) *TriangleBVH {
+	if bvh == nil {
+		return nil
+	}
+	out := &TriangleBVH{
+		Bounds: bvh.bounds,
+	}
+	if bvh.IsLeaf() && bvh.Item.IsValid() {
+		if tri, ok := bvh.Item.HitCheck.(DetailedTriangle); ok {
+			out.Triangle = tri
+			out.HasTriangle = true
+		}
+		return out
+	}
+	out.Left = NewTriangleBVH(bvh.Left)
+	out.Right = NewTriangleBVH(bvh.Right)
+	return out
+}
+
+func (b *TriangleBVH) ToBVH(transform *matrix.Transform, data any) *BVH {
+	if b == nil {
+		return nil
+	}
+	out := &BVH{
+		bounds: b.Bounds,
+	}
+	if b.HasTriangle {
+		out.Item = BVHItem{transform, b.Triangle, data}
+		return out
+	}
+	out.Left = b.Left.ToBVH(transform, data)
+	out.Right = b.Right.ToBVH(transform, data)
+	if out.Left != nil {
+		out.Left.Parent = out
+	}
+	if out.Right != nil {
+		out.Right.Parent = out
+	}
+	return out
 }
 
 func (b *BVH) RayIntersectTest(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {

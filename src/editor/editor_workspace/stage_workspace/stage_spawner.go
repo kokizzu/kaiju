@@ -47,7 +47,6 @@ import (
 	"kaijuengine.com/editor/editor_stage_manager/data_binding_renderer"
 	"kaijuengine.com/editor/project/project_database/content_database"
 	"kaijuengine.com/engine/assets"
-	"kaijuengine.com/engine/collision"
 	"kaijuengine.com/engine_entity_data/engine_entity_data_camera"
 	"kaijuengine.com/engine_entity_data/engine_entity_data_light"
 	"kaijuengine.com/engine_entity_data/engine_entity_data_particles"
@@ -357,23 +356,13 @@ func (w *StageWorkspace) spawnMesh(cc *content_database.CachedContent, point mat
 	e.StageData.Description.Mesh = e.StageData.Mesh.Key()
 	e.StageData.Description.Material = mat.Id
 	e.Transform.SetPosition(point)
-	// Create a temp proxy bvh to make this thing clickable while we wait for
-	// the full BVH to be generated
-	e.StageData.Bvh = collision.NewBVH([]collision.HitObject{collision.AABBFromTransform(&e.Transform)}, &e.Transform, e)
+	missingBVH := km.BVH == nil
+	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
+	if missingBVH {
+		content_database.SaveMeshBVHInBackground(km, path, w.ed.ProjectFileSystem(), cc.Id())
+	}
 	man.AddBVH(e.StageData.Bvh, &e.Transform)
 	man.RefitBVH(e)
-	// goroutine
-	go func() {
-		// TODO:  The BVH should probably be pre-generated in the kaiju mesh
-		// so that this doesn't need to happen here?
-		e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
-		w.Host.RunOnMainThread(func() {
-			// Remove the proxy BVH for this entity
-			man.RemoveEntityBVH(e)
-			man.AddBVH(e.StageData.Bvh, &e.Transform)
-			man.RefitBVH(e)
-		})
-	}()
 	e.StageData.ShaderData = &shader_data_registry.ShaderDataStandard{
 		ShaderDataBase: rendering.NewShaderDataBase(),
 		Color:          matrix.ColorWhite(),

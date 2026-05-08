@@ -181,7 +181,8 @@ func reimportByNameMatching(cat ContentCategory, id string, cache *Cache, fs *pr
 	for i := range proc.Variants {
 		if proc.Variants[i].Name == cc.Config.SrcName {
 			return ProcessedImport{
-				Variants: []ImportVariant{proc.Variants[i]},
+				Variants:        []ImportVariant{proc.Variants[i]},
+				postProcessData: proc.postProcessData,
 			}, nil
 		}
 	}
@@ -190,4 +191,3 @@ func reimportByNameMatching(cat ContentCategory, id string, cache *Cache, fs *pr
 		Name: cc.Config.SrcName,
 	}
 }
-

@@ -73,9 +73,42 @@ func (Mesh) ExtNames() []string { return []string{".gltf", ".glb", ".obj"} }
 
 type meshImportPostProcData struct {
 	mesh         load_result.Mesh
+	kaijuMesh    kaiju_mesh.KaijuMesh
 	meshes       []load_result.Mesh
 	isAnimated   bool
 	textureBytes map[string][]byte
+}
+
+func EnsureMeshBVHInBackground(km kaiju_mesh.KaijuMesh, path string, fs *project_file_system.FileSystem, id string) {
+	if km.BVH != nil {
+		return
+	}
+	// goroutine
+	go func() {
+		km.EnsureBVH()
+		if km.BVH == nil {
+			return
+		}
+		writeMeshBVH(km, path, fs, id)
+	}()
+}
+
+func SaveMeshBVHInBackground(km kaiju_mesh.KaijuMesh, path string, fs *project_file_system.FileSystem, id string) {
+	if km.BVH == nil {
+		return
+	}
+	go writeMeshBVH(km, path, fs, id)
+}
+
+func writeMeshBVH(km kaiju_mesh.KaijuMesh, path string, fs *project_file_system.FileSystem, id string) {
+	data, err := km.Serialize()
+	if err != nil {
+		slog.Error("failed to serialize the mesh BVH", "id", id, "error", err)
+		return
+	}
+	if err = fs.WriteFile(path, data, os.ModePerm); err != nil {
+		slog.Error("failed to write the mesh BVH", "id", id, "path", path, "error", err)
+	}
 }
 
 func (Mesh) Import(src string, _ *project_file_system.FileSystem) (ProcessedImport, error) {
@@ -123,6 +156,7 @@ func (Mesh) Import(src string, _ *project_file_system.FileSystem) (ProcessedImpo
 		isAnimated := res.IsTreeAnimated(int(res.Meshes[i].Node.Id))
 		postProcData[v.Name] = meshImportPostProcData{
 			mesh:         res.Meshes[i],
+			kaijuMesh:    kms[i],
 			meshes:       res.Meshes,
 			isAnimated:   isAnimated,
 			textureBytes: res.TextureBytes,
@@ -167,6 +201,7 @@ func (Mesh) PostImportProcessing(proc ProcessedImport, res *ImportResult, fs *pr
 		slog.Error("failed to locate the mesh in the post processing data", "name", cc.Config.Name)
 		return nil
 	}
+	EnsureMeshBVHInBackground(variant.kaijuMesh, res.ContentPath().String(), fs, res.Id)
 	texKeyToDepId := make(map[string]string)
 	texKeyToData := make(map[string][]byte)
 	for i := range variant.meshes {
@@ -347,5 +382,28 @@ func (Mesh) PostImportProcessing(proc ProcessedImport, res *ImportResult, fs *pr
 	if !errors.Is(err, CacheContentNameEqual) {
 		return err
 	}
+	return nil
+}
+
+func (Mesh) PostReimportProcessing(proc ProcessedImport, res *ImportResult, fs *project_file_system.FileSystem, cache *Cache) error {
+	defer tracing.NewRegion("Mesh.PostReimportProcessing").End()
+	meshes, ok := proc.postProcessData.(map[string]meshImportPostProcData)
+	if !ok || len(proc.Variants) == 0 {
+		return nil
+	}
+	variant, ok := meshes[proc.Variants[0].Name]
+	if !ok {
+		cc, err := cache.Read(res.Id)
+		if err != nil {
+			return err
+		}
+		variant, ok = meshes[cc.Config.SrcName]
+		if !ok {
+			slog.Error("failed to locate the reimported mesh in the post processing data",
+				"name", cc.Config.SrcName)
+			return nil
+		}
+	}
+	EnsureMeshBVHInBackground(variant.kaijuMesh, res.ContentPath().String(), fs, res.Id)
 	return nil
 }

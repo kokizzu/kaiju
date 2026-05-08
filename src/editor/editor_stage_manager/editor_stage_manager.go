@@ -692,7 +692,8 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	case "plane":
 		km.Verts, km.Indexes = rendering.MeshPlaneData()
 	default:
-		kmData, err := fs.ReadFile(filepath.Join(rootFolder, meshFolder, meshId))
+		meshPath := filepath.Join(rootFolder, meshFolder, meshId)
+		kmData, err := fs.ReadFile(meshPath)
 		if err != nil {
 			slog.Error("failed to load the mesh data", "id", meshId, "error", err)
 			return err
@@ -746,11 +747,12 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	mat = mat.CreateInstance(texs)
 	e.StageData.ShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
 	e.StageData.Mesh = mesh
-	// Temp set position to 0,0,0 for the BVH generation
-	ePos := e.Transform.Position()
-	e.Transform.SetPosition(matrix.Vec3Zero())
+	missingBVH := km.BVH == nil && meshId != "quad" && meshId != "plane"
 	e.StageData.Bvh = km.GenerateBVH(host.Threads(), &e.Transform, e)
-	e.Transform.SetPosition(ePos)
+	if missingBVH {
+		content_database.SaveMeshBVHInBackground(km,
+			filepath.Join(rootFolder, meshFolder, meshId), fs, meshId)
+	}
 	m.AddBVH(e.StageData.Bvh, &e.Transform)
 	host.RunOnMainThread(func() {
 		for i := range texs {
@@ -830,4 +832,3 @@ func explodeEntityHierarchy(e *StageEntity) []*StageEntity {
 	explode(e)
 	return all
 }
-

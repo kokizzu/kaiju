@@ -216,7 +216,6 @@ func findBinChar(font fontBin, letter rune) fontBinChar {
 }
 
 func (cache *FontCache) charCountInWidth(font fontBin, runes []rune, maxWidth, scale float32) int {
-	defer tracing.NewRegion("FontCache.charCountInWidth").End()
 	wrap := false
 	spaceIndex := 0
 	wx := float32(0.0)

@@ -320,7 +320,6 @@ func (ui *UI) Clean() {
 }
 
 func (ui *UI) GenerateScissor() {
-	defer tracing.NewRegion("UI.GenerateScissor").End()
 	target := &ui.entity.Transform
 	pos := target.WorldPosition()
 	size := target.WorldScale()

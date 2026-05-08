@@ -436,7 +436,7 @@ func (p *Panel) updateShaderVisibility() {
 }
 
 func (p *Panel) boundsChildren(bounds *matrix.Vec2) {
-	defer tracing.NewRegion("Panel.boundsChildren").End()
+	// defer tracing.NewRegion("Panel.boundsChildren").End()
 	for _, kid := range p.entity.Children {
 		kui := FirstOnEntity(kid)
 		if kui.Layout().Positioning() == PositioningAbsolute {
@@ -1213,7 +1213,6 @@ func (p *Panel) HasEnforcedColor() bool {
 }
 
 func (p *Panel) setColorInternal(bgColor matrix.Color) {
-	defer tracing.NewRegion("Panel.setColorInternal").End()
 	p.ensureBGExists(nil)
 	if p.shaderData.FgColor.Equals(bgColor) {
 		return

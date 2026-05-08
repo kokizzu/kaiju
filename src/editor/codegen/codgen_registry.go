@@ -53,7 +53,6 @@ func init() {
 	RegisterType[matrix.Color]()
 	RegisterType[matrix.Color]()
 	RegisterType[matrix.Mat3]()
-	RegisterType[matrix.Mat3]()
 	RegisterType[matrix.Mat4]()
 	RegisterType[matrix.Mat4]()
 	RegisterType[matrix.Quaternion]()

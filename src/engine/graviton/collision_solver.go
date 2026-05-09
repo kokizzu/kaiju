@@ -349,26 +349,15 @@ func (s *CollisionSolver) solvePosition(manifold *ContactManifold) {
 }
 
 func velocityAtContact(body *RigidBody, r matrix.Vec3) matrix.Vec3 {
-	if body == nil {
-		return matrix.Vec3Zero()
-	}
-	return body.MotionState.LinearVelocity.Add(body.MotionState.AngularVelocity.Cross(r))
+	return VelocityAtAnchor(body, r)
 }
 
 func impulseDenominator(bodyA, bodyB *RigidBody, ra, rb, axis matrix.Vec3) matrix.Float {
-	denominator := bodyA.inverseMass() + bodyB.inverseMass()
-	denominator += angularImpulseDenominator(bodyA, ra, axis)
-	denominator += angularImpulseDenominator(bodyB, rb, axis)
-	return denominator
+	return ConstraintImpulseDenominator(bodyA, bodyB, ra, rb, axis)
 }
 
 func angularImpulseDenominator(body *RigidBody, r, axis matrix.Vec3) matrix.Float {
-	inverseInertia := body.inverseInertia()
-	if inverseInertia.IsZero() {
-		return 0
-	}
-	angular := r.Cross(axis).Multiply(inverseInertia)
-	return angular.Cross(r).Dot(axis)
+	return AngularEffectiveMass(body, r, axis)
 }
 
 func applyImpulse(body *RigidBody, impulse, r matrix.Vec3) {

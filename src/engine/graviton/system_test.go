@@ -94,6 +94,45 @@ func TestSystemClearRemovesBodiesAndContacts(t *testing.T) {
 	}
 }
 
+func TestSystemRaycastReturnsClosestHit(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	farBody := addSystemSphere(&system, matrix.Vec3{4, 0, 0}, RigidBodyTypeStatic)
+	nearBody := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeStatic)
+
+	hit, ok := system.Raycast(matrix.Vec3Zero(), matrix.Vec3{10, 0, 0})
+	if !ok {
+		t.Fatal("expected raycast to hit a body")
+	}
+	if hit.Body != nearBody {
+		t.Fatalf("expected raycast to return closest body %p, got %p", nearBody, hit.Body)
+	}
+	if hit.Body == farBody {
+		t.Fatal("expected far body not to be selected")
+	}
+	if !matrix.Approx(hit.Distance, 1) {
+		t.Fatalf("expected hit distance 1, got %f", hit.Distance)
+	}
+	if !matrix.Vec3ApproxTo(hit.Point, matrix.Vec3{1, 0, 0}, 0.0001) {
+		t.Fatalf("expected hit point at 1,0,0, got %v", hit.Point)
+	}
+	if !matrix.Vec3ApproxTo(hit.Normal, matrix.Vec3Left(), 0.0001) {
+		t.Fatalf("expected hit normal -X, got %v", hit.Normal)
+	}
+}
+
+func TestSystemRaycastNoHit(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	addSystemSphere(&system, matrix.Vec3{0, 3, 0}, RigidBodyTypeStatic)
+
+	if hit, ok := system.Raycast(matrix.Vec3Zero(), matrix.Vec3{10, 0, 0}); ok {
+		t.Fatalf("expected raycast to miss, got hit %+v", hit)
+	}
+}
+
 func addSystemSphere(system *System, position matrix.Vec3, bodyType RigidBodyType) *RigidBody {
 	body := system.NewBody()
 	body.Active = true

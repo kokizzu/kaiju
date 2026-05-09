@@ -61,6 +61,23 @@ func (s *CollisionSolver) Initialize() {
 	s.initialized = true
 }
 
+func (s *CollisionSolver) Reset() {
+	for key := range s.bodyIndex {
+		delete(s.bodyIndex, key)
+	}
+	for key := range s.rootToIsland {
+		delete(s.rootToIsland, key)
+	}
+	for i := range s.islands {
+		s.islands[i].manifolds = s.islands[i].manifolds[:0]
+	}
+	s.islands = s.islands[:0]
+	s.writableBodies = s.writableBodies[:0]
+	s.parents = s.parents[:0]
+	s.ranks = s.ranks[:0]
+	s.eligibleContacts = s.eligibleContacts[:0]
+}
+
 func (s *CollisionSolver) Solve(manifolds []ContactManifold, threads *concurrent.Threads) {
 	if len(manifolds) == 0 {
 		return

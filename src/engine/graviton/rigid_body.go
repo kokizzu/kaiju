@@ -22,6 +22,7 @@ type RigidBody struct {
 	Active      bool
 	poolId      pooling.PoolGroupId
 	id          pooling.PoolIndex
+	pooled      bool
 }
 
 type MotionState struct {

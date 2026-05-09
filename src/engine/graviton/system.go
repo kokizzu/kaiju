@@ -37,8 +37,33 @@ func (s *System) NewBody() *RigidBody {
 	*body = RigidBody{}
 	body.poolId = pool
 	body.id = id
+	body.pooled = true
 	body.Transform.SetupRawTransform()
 	return body
+}
+
+func (s *System) RemoveBody(body *RigidBody) {
+	if body == nil || !body.pooled {
+		return
+	}
+	poolId := body.poolId
+	id := body.id
+	body.Active = false
+	body.pooled = false
+	s.bodies.Remove(poolId, id)
+	*body = RigidBody{}
+}
+
+func (s *System) Clear() {
+	s.bodies.Each(func(body *RigidBody) {
+		body.Active = false
+		body.pooled = false
+		*body = RigidBody{}
+	})
+	s.bodies.Clear()
+	s.broadPhase.Rebuild(&s.bodies)
+	s.narrowPhase.Reset()
+	s.solver.Reset()
 }
 
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {

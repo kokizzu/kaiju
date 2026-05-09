@@ -80,7 +80,7 @@ func (p *PoolGroup[T]) selectPool() (*Pool[T], PoolGroupId) {
 
 func (p *PoolGroup[T]) Clear() {
 	for i := range p.pools {
-		for j, idx := ElementsInPool-1, 0; i >= 0; i-- {
+		for j, idx := ElementsInPool-1, 0; j >= 0; j-- {
 			p.pools[i].available[idx] = PoolIndex(j)
 			idx++
 		}

@@ -67,6 +67,125 @@ func TestNarrowPhaseCapsuleCapsuleContact(t *testing.T) {
 	}
 }
 
+func TestNarrowPhaseSphereStaticMeshFloorContact(t *testing.T) {
+	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.45, 0})
+	mesh := testStaticMeshBody(testMeshFloor())
+
+	manifold, ok := CollideBodies(sphere, mesh)
+	if !ok {
+		t.Fatal("expected sphere to collide with mesh floor")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Down(), 0.0001) {
+		t.Fatalf("expected downward sphere-to-mesh normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.05) > 0.0001 {
+		t.Fatalf("expected penetration 0.05, got %f", contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseCapsuleStaticMeshFloorContact(t *testing.T) {
+	capsule := testRigidBody(NewCapsuleShape(0.5, 2), matrix.Vec3{0, 1.45, 0})
+	mesh := testStaticMeshBody(testMeshFloor())
+
+	manifold, ok := CollideBodies(capsule, mesh)
+	if !ok {
+		t.Fatal("expected capsule to collide with mesh floor")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Down(), 0.0001) {
+		t.Fatalf("expected downward capsule-to-mesh normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.05) > 0.0001 {
+		t.Fatalf("expected penetration 0.05, got %f", contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseOOBBStaticMeshFloorContact(t *testing.T) {
+	box := testRigidBody(NewBoxShape(matrix.NewVec3(0.5, 0.5, 0.5)), matrix.Vec3{0, 0.45, 0})
+	mesh := testStaticMeshBody(testMeshFloor())
+
+	manifold, ok := CollideBodies(box, mesh)
+	if !ok {
+		t.Fatal("expected box to collide with mesh floor")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Down(), 0.0001) {
+		t.Fatalf("expected downward box-to-mesh normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.05) > 0.0001 {
+		t.Fatalf("expected penetration 0.05, got %f", contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseSphereStaticMeshSlopeContact(t *testing.T) {
+	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.45, 0})
+	mesh := testStaticMeshBody(testSlopedMeshFloor())
+
+	manifold, ok := CollideBodies(sphere, mesh)
+	if !ok {
+		t.Fatal("expected sphere to collide with sloped mesh floor")
+	}
+	normal := manifold.Contacts[0].Normal
+	expected := matrix.NewVec3(0.4472136, -0.8944272, 0)
+	if !matrix.Vec3ApproxTo(normal, expected, 0.0001) {
+		t.Fatalf("expected slope normal %v, got %v", expected, normal)
+	}
+}
+
+func TestNarrowPhaseSphereStaticMeshEdgeContact(t *testing.T) {
+	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.4, -0.2})
+	mesh := testStaticMeshBody(NewMeshCollisionFromVertices([]matrix.Vec3{
+		{-1, 0, 0},
+		{1, 0, 0},
+		{0, 0, 1},
+	}, []uint32{0, 1, 2}))
+
+	manifold, ok := CollideBodies(sphere, mesh)
+	if !ok {
+		t.Fatal("expected sphere to collide with triangle edge")
+	}
+	contact := manifold.Contacts[0]
+	if contact.Normal.Y() >= 0 || contact.Normal.Z() <= 0 {
+		t.Fatalf("expected edge contact normal to point down and toward triangle, got %v", contact.Normal)
+	}
+	if contact.Penetration <= 0 {
+		t.Fatalf("expected positive edge penetration, got %f", contact.Penetration)
+	}
+}
+
+func TestSystemDynamicSphereRestsOnStaticMeshFloor(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	sphere := system.NewBody()
+	sphere.SetDynamic(1, matrix.Vec3One())
+	sphere.Collision.Shape = NewSphereShape(0.5)
+	sphere.Transform.SetPosition(matrix.Vec3{0, 0.5, 0})
+
+	floor := system.NewBody()
+	floor.SetStaticMesh(testMeshFloor())
+
+	workGroup := concurrent.WorkGroup{}
+	workGroup.Init()
+	threads := concurrent.Threads{}
+	threads.Initialize()
+	threads.Start()
+	defer threads.Stop()
+
+	hadContact := false
+	for range 30 {
+		system.Step(&workGroup, &threads, 1.0/60.0)
+		hadContact = hadContact || len(system.Contacts()) > 0
+	}
+	if !hadContact {
+		t.Fatal("expected sphere to contact mesh floor while stepping")
+	}
+	if sphere.Transform.WorldPosition().Y() < 0.45 {
+		t.Fatalf("expected sphere to rest on mesh floor, got position %v", sphere.Transform.WorldPosition())
+	}
+}
+
 func TestNarrowPhaseParallelMatchesSequential(t *testing.T) {
 	pairs := make([]ActivePair, 0, 256)
 	bodies := make([]*RigidBody, 0, 64)
@@ -158,6 +277,31 @@ func testRigidBody(shape Shape, position matrix.Vec3) *RigidBody {
 	body.SetMass(1, matrix.Vec3One())
 	body.Simulation.Type = RigidBodyTypeDynamic
 	return body
+}
+
+func testStaticMeshBody(mesh *MeshCollision) *RigidBody {
+	body := &RigidBody{}
+	body.Transform.SetupRawTransform()
+	body.SetStaticMesh(mesh)
+	return body
+}
+
+func testMeshFloor() *MeshCollision {
+	return NewMeshCollisionFromVertices([]matrix.Vec3{
+		{-2, 0, -2},
+		{2, 0, -2},
+		{-2, 0, 2},
+		{2, 0, 2},
+	}, []uint32{0, 1, 2, 2, 1, 3})
+}
+
+func testSlopedMeshFloor() *MeshCollision {
+	return NewMeshCollisionFromVertices([]matrix.Vec3{
+		{-2, -1, -2},
+		{2, 1, -2},
+		{-2, -1, 2},
+		{2, 1, 2},
+	}, []uint32{0, 1, 2, 2, 1, 3})
 }
 
 func manifoldSet(manifolds []ContactManifold) map[[2]*RigidBody]bool {

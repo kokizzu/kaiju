@@ -81,6 +81,26 @@ func AABBFromTriangles(triangles []DetailedTriangle) AABB {
 	return bounds
 }
 
+func (m *MeshCollision) ForEachWorldTriangle(transform *matrix.Transform, visit func(DetailedTriangle) bool) {
+	if m == nil || visit == nil {
+		return
+	}
+	for i := range m.Triangles {
+		tri := m.Triangles[i]
+		if transform != nil {
+			wm := transform.WorldMatrix()
+			tri = DetailedTriangleFromPoints([3]matrix.Vec3{
+				wm.TransformPoint(tri.Points[0]),
+				wm.TransformPoint(tri.Points[1]),
+				wm.TransformPoint(tri.Points[2]),
+			})
+		}
+		if !visit(tri) {
+			return
+		}
+	}
+}
+
 func (m *MeshCollision) Raycast(ray Ray, length matrix.Float, transform *matrix.Transform) (Hit, bool) {
 	if m == nil || m.BVH == nil || length <= contactEpsilon {
 		return Hit{}, false

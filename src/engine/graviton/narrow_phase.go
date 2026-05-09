@@ -131,6 +131,17 @@ func CollideBodies(a, b *RigidBody) (ContactManifold, bool) {
 	if a == nil || b == nil {
 		return ContactManifold{}, false
 	}
+	if contact, ok := collideBodyMeshPair(a, b); ok {
+		contact.BodyA = a
+		contact.BodyB = b
+		manifold := ContactManifold{
+			BodyA:  a,
+			BodyB:  b,
+			Normal: contact.Normal,
+		}
+		manifold.add(contact)
+		return manifold, true
+	}
 	shapeA := worldShape(a)
 	shapeB := worldShape(b)
 	contact, ok := collideShapes(shapeA, shapeB)
@@ -146,6 +157,26 @@ func CollideBodies(a, b *RigidBody) (ContactManifold, bool) {
 	}
 	manifold.add(contact)
 	return manifold, true
+}
+
+func collideBodyMeshPair(a, b *RigidBody) (Contact, bool) {
+	if a.Collision.Shape.Type == ShapeTypeMesh || b.Collision.Shape.Type == ShapeTypeMesh {
+		if a.Collision.Shape.Type == ShapeTypeMesh && b.Collision.Shape.Type == ShapeTypeMesh {
+			return Contact{}, false
+		}
+		if a.Collision.Shape.Type == ShapeTypeMesh {
+			if !a.IsStatic() || a.Collision.Mesh == nil {
+				return Contact{}, false
+			}
+			contact, ok := collidePrimitiveStaticMesh(worldShape(b), a.Collision.Mesh, &a.Transform)
+			return flipContact(contact), ok
+		}
+		if !b.IsStatic() || b.Collision.Mesh == nil {
+			return Contact{}, false
+		}
+		return collidePrimitiveStaticMesh(worldShape(a), b.Collision.Mesh, &b.Transform)
+	}
+	return Contact{}, false
 }
 
 func collideShapes(a, b Shape) (Contact, bool) {
@@ -325,6 +356,19 @@ func collideConeAny(a Cone, b Shape) (Contact, bool) {
 	return approximateContact(Shape(a), b), true
 }
 
+func collidePrimitiveStaticMesh(primitive Shape, mesh *MeshCollision, meshTransform *matrix.Transform) (Contact, bool) {
+	switch primitive.Type {
+	case ShapeTypeSphere:
+		return collideSphereMesh(Sphere(primitive), mesh, meshTransform)
+	case ShapeTypeCapsule:
+		return collideCapsuleMesh(Capsule(primitive), mesh, meshTransform)
+	case ShapeTypeOOBB:
+		return collideOOBBMesh(OOBB(primitive), mesh, meshTransform)
+	default:
+		return Contact{}, false
+	}
+}
+
 func collideSphereSphere(a, b Sphere) (Contact, bool) {
 	ab := b.Center.Subtract(a.Center)
 	distSq := ab.LengthSquared()
@@ -341,6 +385,36 @@ func collideSphereSphere(a, b Sphere) (Contact, bool) {
 	pointA := a.Center.Add(normal.Scale(a.Radius))
 	pointB := b.Center.Subtract(normal.Scale(b.Radius))
 	return newContact(pointA, pointB, normal, radius-dist), true
+}
+
+func collideSphereMesh(s Sphere, mesh *MeshCollision, meshTransform *matrix.Transform) (Contact, bool) {
+	if mesh == nil || len(mesh.Triangles) == 0 {
+		return Contact{}, false
+	}
+	radiusSq := s.Radius * s.Radius
+	bestDistanceSq := matrix.Inf(1)
+	var bestContact Contact
+	found := false
+	mesh.ForEachWorldTriangle(meshTransform, func(tri DetailedTriangle) bool {
+		closest := closestPointOnTriangle(s.Center, tri.Points[0], tri.Points[1], tri.Points[2])
+		delta := closest.Subtract(s.Center)
+		distSq := delta.LengthSquared()
+		if distSq > radiusSq || distSq >= bestDistanceSq {
+			return true
+		}
+		normal := primitiveToTriangleNormal(s.Center, closest, tri)
+		dist := matrix.Float(0)
+		if distSq > contactEpsilon*contactEpsilon {
+			dist = matrix.Sqrt(distSq)
+			normal = delta.Scale(1 / dist)
+		}
+		pointA := s.Center.Add(normal.Scale(s.Radius))
+		bestContact = newContact(pointA, closest, normal, s.Radius-dist)
+		bestDistanceSq = distSq
+		found = true
+		return true
+	})
+	return bestContact, found
 }
 
 func collideSphereAABB(s Sphere, b AABB) (Contact, bool) {
@@ -388,6 +462,37 @@ func collideSphereCapsule(s Sphere, c Capsule) (Contact, bool) {
 		Type:   ShapeTypeSphere,
 	}
 	return collideSphereSphere(s, virtual)
+}
+
+func collideCapsuleMesh(c Capsule, mesh *MeshCollision, meshTransform *matrix.Transform) (Contact, bool) {
+	if mesh == nil || len(mesh.Triangles) == 0 {
+		return Contact{}, false
+	}
+	a, b := capsuleSegment(c)
+	radiusSq := c.Radius * c.Radius
+	bestDistanceSq := matrix.Inf(1)
+	var bestContact Contact
+	found := false
+	mesh.ForEachWorldTriangle(meshTransform, func(tri DetailedTriangle) bool {
+		segPoint, triPoint := closestSegmentTriangle(a, b, tri.Points[0], tri.Points[1], tri.Points[2])
+		delta := triPoint.Subtract(segPoint)
+		distSq := delta.LengthSquared()
+		if distSq > radiusSq || distSq >= bestDistanceSq {
+			return true
+		}
+		normal := primitiveToTriangleNormal(segPoint, triPoint, tri)
+		dist := matrix.Float(0)
+		if distSq > contactEpsilon*contactEpsilon {
+			dist = matrix.Sqrt(distSq)
+			normal = delta.Scale(1 / dist)
+		}
+		pointA := segPoint.Add(normal.Scale(c.Radius))
+		bestContact = newContact(pointA, triPoint, normal, c.Radius-dist)
+		bestDistanceSq = distSq
+		found = true
+		return true
+	})
+	return bestContact, found
 }
 
 func collideAABBAABB(a, b AABB) (Contact, bool) {
@@ -445,6 +550,62 @@ func collideOOBBOOBB(a, b OOBB) (Contact, bool) {
 	}
 	pointA := supportOOBB(a, normal)
 	pointB := supportOOBB(b, normal.Negative())
+	return newContact(pointA, pointB, normal, minOverlap), true
+}
+
+func collideOOBBMesh(box OOBB, mesh *MeshCollision, meshTransform *matrix.Transform) (Contact, bool) {
+	if mesh == nil || len(mesh.Triangles) == 0 {
+		return Contact{}, false
+	}
+	bestPenetration := matrix.Inf(1)
+	var bestContact Contact
+	found := false
+	mesh.ForEachWorldTriangle(meshTransform, func(tri DetailedTriangle) bool {
+		contact, ok := collideOOBBTriangle(box, tri)
+		if !ok || contact.Penetration >= bestPenetration {
+			return true
+		}
+		bestPenetration = contact.Penetration
+		bestContact = contact
+		found = true
+		return true
+	})
+	return bestContact, found
+}
+
+func collideOOBBTriangle(box OOBB, tri DetailedTriangle) (Contact, bool) {
+	normal := matrix.Vec3Right()
+	minOverlap := matrix.Inf(1)
+	triPoints := tri.Points
+	axes := [13]matrix.Vec3{}
+	axes[0] = box.Orientation.ColumnVector(0)
+	axes[1] = box.Orientation.ColumnVector(1)
+	axes[2] = box.Orientation.ColumnVector(2)
+	axes[3] = triangleNormal(tri)
+	edge0 := triPoints[1].Subtract(triPoints[0])
+	edge1 := triPoints[2].Subtract(triPoints[1])
+	edge2 := triPoints[0].Subtract(triPoints[2])
+	edges := [3]matrix.Vec3{edge0, edge1, edge2}
+	index := 4
+	for i := 0; i < 3; i++ {
+		boxAxis := box.Orientation.ColumnVector(i)
+		for j := 0; j < 3; j++ {
+			axes[index] = matrix.Vec3Cross(boxAxis, edges[j])
+			index++
+		}
+	}
+	for i := range axes {
+		axis := axes[i]
+		if axis.LengthSquared() <= contactEpsilon*contactEpsilon {
+			continue
+		}
+		axis = axis.Normal()
+		if !satOOBBTriangleAxis(box, triPoints, axis, &normal, &minOverlap) {
+			return Contact{}, false
+		}
+	}
+	pointA := supportOOBB(box, normal)
+	pointB := closestPointOnTriangle(pointA, triPoints[0], triPoints[1], triPoints[2])
 	return newContact(pointA, pointB, normal, minOverlap), true
 }
 
@@ -611,6 +772,35 @@ func satBoxAxis(a, b OOBB, axis, centerDelta matrix.Vec3, normal *matrix.Vec3, m
 	return true
 }
 
+func satOOBBTriangleAxis(box OOBB, points [3]matrix.Vec3, axis matrix.Vec3, normal *matrix.Vec3, minOverlap *matrix.Float) bool {
+	boxCenter := matrix.Vec3Dot(box.Center, axis)
+	boxRadius := projectOOBBRadius(box, axis)
+	boxMin := boxCenter - boxRadius
+	boxMax := boxCenter + boxRadius
+	triMin := matrix.Vec3Dot(points[0], axis)
+	triMax := triMin
+	for i := 1; i < 3; i++ {
+		projection := matrix.Vec3Dot(points[i], axis)
+		triMin = matrix.Min(triMin, projection)
+		triMax = matrix.Max(triMax, projection)
+	}
+	overlap := matrix.Min(boxMax, triMax) - matrix.Max(boxMin, triMin)
+	if triMax-triMin <= contactEpsilon {
+		overlap = boxRadius - matrix.Abs(triMin-boxCenter)
+	}
+	if overlap < 0 {
+		return false
+	}
+	if overlap < *minOverlap {
+		if matrix.Vec3Dot(points[0].Subtract(box.Center), axis) < 0 {
+			axis = axis.Negative()
+		}
+		*normal = axis
+		*minOverlap = overlap
+	}
+	return true
+}
+
 func projectOOBBRadius(box OOBB, axis matrix.Vec3) matrix.Float {
 	return matrix.Abs(matrix.Vec3Dot(box.Orientation.ColumnVector(0), axis))*box.Extent.X() +
 		matrix.Abs(matrix.Vec3Dot(box.Orientation.ColumnVector(1), axis))*box.Extent.Y() +
@@ -640,6 +830,136 @@ func supportAABB(box AABB, direction matrix.Vec3) matrix.Vec3 {
 		}
 	}
 	return point
+}
+
+func closestPointOnTriangle(point, a, b, c matrix.Vec3) matrix.Vec3 {
+	ab := b.Subtract(a)
+	ac := c.Subtract(a)
+	ap := point.Subtract(a)
+	d1 := ab.Dot(ap)
+	d2 := ac.Dot(ap)
+	if d1 <= 0 && d2 <= 0 {
+		return a
+	}
+	bp := point.Subtract(b)
+	d3 := ab.Dot(bp)
+	d4 := ac.Dot(bp)
+	if d3 >= 0 && d4 <= d3 {
+		return b
+	}
+	vc := d1*d4 - d3*d2
+	if vc <= 0 && d1 >= 0 && d3 <= 0 {
+		v := d1 / (d1 - d3)
+		return a.Add(ab.Scale(v))
+	}
+	cp := point.Subtract(c)
+	d5 := ab.Dot(cp)
+	d6 := ac.Dot(cp)
+	if d6 >= 0 && d5 <= d6 {
+		return c
+	}
+	vb := d5*d2 - d1*d6
+	if vb <= 0 && d2 >= 0 && d6 <= 0 {
+		w := d2 / (d2 - d6)
+		return a.Add(ac.Scale(w))
+	}
+	va := d3*d6 - d5*d4
+	if va <= 0 && (d4-d3) >= 0 && (d5-d6) >= 0 {
+		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
+		return b.Add(c.Subtract(b).Scale(w))
+	}
+	denom := 1 / (va + vb + vc)
+	v := vb * denom
+	w := vc * denom
+	return a.Add(ab.Scale(v)).Add(ac.Scale(w))
+}
+
+func closestSegmentTriangle(p, q, a, b, c matrix.Vec3) (matrix.Vec3, matrix.Vec3) {
+	if hit, ok := segmentTrianglePoint(p, q, a, b, c); ok {
+		return hit, hit
+	}
+	bestSegment := p
+	bestTriangle := closestPointOnTriangle(p, a, b, c)
+	bestDistanceSq := bestSegment.Subtract(bestTriangle).LengthSquared()
+	candidates := [1][2]matrix.Vec3{
+		{q, closestPointOnTriangle(q, a, b, c)},
+	}
+	for i := range candidates {
+		distanceSq := candidates[i][0].Subtract(candidates[i][1]).LengthSquared()
+		if distanceSq < bestDistanceSq {
+			bestSegment = candidates[i][0]
+			bestTriangle = candidates[i][1]
+			bestDistanceSq = distanceSq
+		}
+	}
+	edges := [3][2]matrix.Vec3{{a, b}, {b, c}, {c, a}}
+	for i := range edges {
+		segPoint, edgePoint := closestSegmentSegment(p, q, edges[i][0], edges[i][1])
+		distanceSq := segPoint.Subtract(edgePoint).LengthSquared()
+		if distanceSq < bestDistanceSq {
+			bestSegment = segPoint
+			bestTriangle = edgePoint
+			bestDistanceSq = distanceSq
+		}
+	}
+	return bestSegment, bestTriangle
+}
+
+func segmentTrianglePoint(p, q, a, b, c matrix.Vec3) (matrix.Vec3, bool) {
+	normal := matrix.Vec3Cross(b.Subtract(a), c.Subtract(a))
+	direction := q.Subtract(p)
+	denom := normal.Dot(direction)
+	if matrix.Abs(denom) <= contactEpsilon {
+		return matrix.Vec3Zero(), false
+	}
+	t := normal.Dot(a.Subtract(p)) / denom
+	if t < 0 || t > 1 {
+		return matrix.Vec3Zero(), false
+	}
+	point := p.Add(direction.Scale(t))
+	if !pointInTriangle(point, a, b, c) {
+		return matrix.Vec3Zero(), false
+	}
+	return point, true
+}
+
+func pointInTriangle(point, a, b, c matrix.Vec3) bool {
+	v0 := c.Subtract(a)
+	v1 := b.Subtract(a)
+	v2 := point.Subtract(a)
+	dot00 := v0.Dot(v0)
+	dot01 := v0.Dot(v1)
+	dot02 := v0.Dot(v2)
+	dot11 := v1.Dot(v1)
+	dot12 := v1.Dot(v2)
+	denom := dot00*dot11 - dot01*dot01
+	if matrix.Abs(denom) <= contactEpsilon {
+		return false
+	}
+	invDenom := 1 / denom
+	u := (dot11*dot02 - dot01*dot12) * invDenom
+	v := (dot00*dot12 - dot01*dot02) * invDenom
+	return u >= -contactEpsilon && v >= -contactEpsilon && u+v <= 1+contactEpsilon
+}
+
+func primitiveToTriangleNormal(primitivePoint, trianglePoint matrix.Vec3, tri DetailedTriangle) matrix.Vec3 {
+	delta := trianglePoint.Subtract(primitivePoint)
+	if delta.LengthSquared() > contactEpsilon*contactEpsilon {
+		return delta.Normal()
+	}
+	normal := triangleNormal(tri)
+	if normal.Dot(primitivePoint.Subtract(trianglePoint)) > 0 {
+		normal = normal.Negative()
+	}
+	return safeNormal(normal, fallbackNormal(primitivePoint, tri.Centroid))
+}
+
+func triangleNormal(tri DetailedTriangle) matrix.Vec3 {
+	normal := matrix.Vec3Cross(
+		tri.Points[1].Subtract(tri.Points[0]),
+		tri.Points[2].Subtract(tri.Points[0]),
+	)
+	return safeNormal(normal, tri.Normal)
 }
 
 func closestAABBFaceNormal(point matrix.Vec3, box AABB) (matrix.Vec3, matrix.Float) {

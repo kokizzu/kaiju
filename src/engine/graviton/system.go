@@ -304,7 +304,11 @@ func (s *System) Constraints() []*Constraint {
 func (s *System) activeConstraints() []*Constraint {
 	s.constraintScratch = s.constraintScratch[:0]
 	s.constraints.Each(func(constraint *Constraint) {
-		if constraint != nil && constraint.Active && constraint.Enabled {
+		if constraint == nil {
+			return
+		}
+		constraint.disableIfBodiesInvalid()
+		if constraint.Active && constraint.Enabled {
 			s.constraintScratch = append(s.constraintScratch, constraint)
 		}
 	})
@@ -377,6 +381,10 @@ func (s *System) wakeConstraints(constraints []*Constraint) {
 		if constraint == nil {
 			continue
 		}
+		if constraint.IsStretched() {
+			constraint.WakeBodies()
+			continue
+		}
 		wakeSleepingConstraintEndpoint(constraint.BodyA, constraint.BodyB)
 		wakeSleepingConstraintEndpoint(constraint.BodyB, constraint.BodyA)
 	}
@@ -402,6 +410,11 @@ func (s *System) updateSleepState(dt matrix.Float) {
 			body.recordSleepTransform()
 			return
 		}
+		if s.bodyHasActiveStretchedConstraint(body) {
+			body.Simulation.SleepTimer = 0
+			body.recordSleepTransform()
+			return
+		}
 		if body.isBelowSleepVelocity() {
 			body.Simulation.SleepTimer += dt
 			if body.Simulation.SleepTimer >= body.sleepThreshold() {
@@ -413,6 +426,23 @@ func (s *System) updateSleepState(dt matrix.Float) {
 		}
 		body.recordSleepTransform()
 	})
+}
+
+func (s *System) bodyHasActiveStretchedConstraint(body *RigidBody) bool {
+	if body == nil {
+		return false
+	}
+	stretched := false
+	s.constraints.Each(func(constraint *Constraint) {
+		if stretched || constraint == nil || !constraint.Active || !constraint.Enabled {
+			return
+		}
+		if constraint.BodyA != body && constraint.BodyB != body {
+			return
+		}
+		stretched = constraint.IsStretched()
+	})
+	return stretched
 }
 
 func integrateAngularVelocity(rotation, angularVelocity matrix.Vec3, dt matrix.Float) matrix.Vec3 {

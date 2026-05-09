@@ -492,6 +492,123 @@ func TestSystemContactWithAwakeBodyWakesSleepingBody(t *testing.T) {
 	}
 }
 
+func TestConstraintCreationWakesBodies(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	bodyA.Sleep()
+	bodyB.Sleep()
+
+	constraint := system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+
+	if bodyA.Simulation.IsSleeping {
+		t.Fatal("expected constraint creation to wake body A")
+	}
+	if bodyB.Simulation.IsSleeping {
+		t.Fatal("expected constraint creation to wake body B")
+	}
+
+	constraint.SetEnabled(false)
+	bodyA.Sleep()
+	bodyB.Sleep()
+	constraint.SetEnabled(true)
+
+	if bodyA.Simulation.IsSleeping {
+		t.Fatal("expected constraint enabling to wake body A")
+	}
+	if bodyB.Simulation.IsSleeping {
+		t.Fatal("expected constraint enabling to wake body B")
+	}
+}
+
+func TestConstraintWithMovingBodyWakesSleepingBody(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	sleeping := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	moved := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	sleeping.Collision.Mask = 0
+	moved.Collision.Mask = 0
+	system.NewDistanceJoint(sleeping, moved, matrix.Vec3Zero(), matrix.Vec3Zero())
+	sleeping.Sleep()
+	moved.Sleep()
+	moved.Transform.SetPosition(matrix.Vec3{3, 0, 0})
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 0)
+
+	if sleeping.Simulation.IsSleeping {
+		t.Fatal("expected moved constrained body to wake its sleeping partner")
+	}
+	if moved.Simulation.IsSleeping {
+		t.Fatal("expected moved constrained body to wake itself")
+	}
+}
+
+func TestStableConstraintIslandSleeps(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	bodyA.Collision.Mask = 0
+	bodyB.Collision.Mask = 0
+	bodyA.Simulation.SleepThreshold = 0.1
+	bodyB.Simulation.SleepThreshold = 0.1
+	system.NewDistanceJoint(bodyA, bodyB, matrix.Vec3Zero(), matrix.Vec3Zero())
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	for range 3 {
+		system.Step(workGroup, threads, 0.05)
+	}
+
+	if !bodyA.Simulation.IsSleeping {
+		t.Fatalf("expected stable constrained body A to sleep, timer %f", bodyA.Simulation.SleepTimer)
+	}
+	if !bodyB.Simulation.IsSleeping {
+		t.Fatalf("expected stable constrained body B to sleep, timer %f", bodyB.Simulation.SleepTimer)
+	}
+}
+
+func TestStretchedConstraintPreventsSleep(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintVelocityIterations = 0
+	system.ConstraintPositionIterations = 0
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{3, 0, 0}, RigidBodyTypeDynamic)
+	bodyA.Collision.Mask = 0
+	bodyB.Collision.Mask = 0
+	bodyA.Simulation.SleepThreshold = 0.1
+	bodyB.Simulation.SleepThreshold = 0.1
+	system.NewDistanceJoint(bodyA, bodyB, matrix.Vec3Zero(), matrix.Vec3Zero()).SetRestLength(1)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	for range 3 {
+		system.Step(workGroup, threads, 0.05)
+	}
+
+	if bodyA.Simulation.IsSleeping {
+		t.Fatal("expected stretched constrained body A to stay awake")
+	}
+	if bodyB.Simulation.IsSleeping {
+		t.Fatal("expected stretched constrained body B to stay awake")
+	}
+}
+
 func TestSystemStepIntegratesAngularVelocityAsRadians(t *testing.T) {
 	system := System{}
 	system.Initialize()

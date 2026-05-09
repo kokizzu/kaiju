@@ -130,6 +130,7 @@ func (j *DistanceJoint) SetWorldAnchors(worldAnchorA, worldAnchorB matrix.Vec3) 
 	j.LocalAnchorB = LocalAnchor(j.BodyB, worldAnchorB)
 	j.RestLength = j.CurrentLength()
 	j.AccumulatedImpulse = 0
+	WakeConstrainedBodies(j.BodyA, j.BodyB)
 }
 
 func (j *DistanceJoint) SetRestLength(restLength matrix.Float) {
@@ -138,6 +139,11 @@ func (j *DistanceJoint) SetRestLength(restLength matrix.Float) {
 	}
 	j.RestLength = matrix.Max(restLength, 0)
 	j.AccumulatedImpulse = 0
+	WakeConstrainedBodies(j.BodyA, j.BodyB)
+}
+
+func (j *DistanceJoint) IsStretched() bool {
+	return j != nil && matrix.Abs(j.CurrentLength()-j.RestLength) > j.slop()
 }
 
 func (j *DistanceJoint) prepare(deltaTime matrix.Float) {

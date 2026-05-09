@@ -76,7 +76,6 @@ func (r *ConstraintSolverRow) SetLocalAnchors(bodyA, bodyB *RigidBody, anchorA, 
 }
 
 func (r *ConstraintSolverRow) SetWorldAnchors(bodyA, bodyB *RigidBody, anchorA, anchorB, axis matrix.Vec3) {
-	WakeConstrainedBodies(bodyA, bodyB)
 	r.BodyA = bodyA
 	r.BodyB = bodyB
 	r.Axis = safeNormal(axis, matrix.Vec3Right())

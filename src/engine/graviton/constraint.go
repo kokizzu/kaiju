@@ -60,6 +60,7 @@ type Constraint struct {
 	poolId   pooling.PoolGroupId
 	id       pooling.PoolIndex
 	pooled   bool
+	awake    bool
 }
 
 func (c *Constraint) IsBodyBody() bool {
@@ -99,6 +100,23 @@ func (c *Constraint) SetBodies(bodyA, bodyB *RigidBody) {
 		c.Distance.BodyB = bodyB
 	}
 	c.disableIfBodiesInvalid()
+	c.syncAwakeState()
+}
+
+func (c *Constraint) SetActive(active bool) {
+	if c == nil {
+		return
+	}
+	c.Active = active
+	c.syncAwakeState()
+}
+
+func (c *Constraint) SetEnabled(enabled bool) {
+	if c == nil {
+		return
+	}
+	c.Enabled = enabled
+	c.syncAwakeState()
 }
 
 func (c *Constraint) disableIfBodiesInvalid() {
@@ -106,6 +124,29 @@ func (c *Constraint) disableIfBodiesInvalid() {
 		c.Active = false
 		c.Enabled = false
 	}
+	c.syncAwakeState()
+}
+
+func (c *Constraint) syncAwakeState() {
+	if c == nil {
+		return
+	}
+	awake := c.Active && c.Enabled && c.BodiesValid()
+	if awake && !c.awake {
+		c.WakeBodies()
+	}
+	c.awake = awake
+}
+
+func (c *Constraint) WakeBodies() {
+	if c == nil {
+		return
+	}
+	WakeConstrainedBodies(c.BodyA, c.BodyB)
+}
+
+func (c *Constraint) IsStretched() bool {
+	return c != nil && c.Distance != nil && c.Distance.IsStretched()
 }
 
 func (c *Constraint) detachBody(body *RigidBody) {
@@ -124,6 +165,7 @@ func (c *Constraint) detachBody(body *RigidBody) {
 	}
 	c.Active = false
 	c.Enabled = false
+	c.awake = false
 }
 
 func constraintBodyValid(body *RigidBody) bool {

@@ -47,6 +47,8 @@ func (s *System) AddBody(body *RigidBody) *RigidBody {
 		return nil
 	}
 	if body.pooled {
+		body.ensureDefaultSleepThreshold()
+		body.recordSleepTransform()
 		return body
 	}
 	stageBody := s.NewBody()
@@ -58,6 +60,8 @@ func (s *System) AddBody(body *RigidBody) *RigidBody {
 	stageBody.Collision = body.Collision
 	stageBody.Simulation = body.Simulation
 	stageBody.Active = body.Active
+	stageBody.ensureDefaultSleepThreshold()
+	stageBody.recordSleepTransform()
 	return stageBody
 }
 
@@ -87,6 +91,7 @@ func (s *System) Clear() {
 
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	dt := matrix.Float(deltaTime)
+	s.prepareSleepState()
 	s.bodies.EachParallel("kaiju.phys", workGroup, threads, func(body *RigidBody) {
 		if !body.Active || body.Simulation.IsSleeping || !body.IsDynamic() {
 			return
@@ -107,7 +112,9 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 	s.broadPhase.RebuildParallel(&s.bodies, threads)
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
 	manifolds := s.narrowPhase.Collide(pairs, threads)
+	s.wakeContacts(manifolds)
 	s.solver.Solve(manifolds, threads)
+	s.updateSleepState(dt)
 }
 
 // Contacts returns the contact manifolds generated during the most recent Step.
@@ -134,4 +141,58 @@ func (s *System) canCollide(a, b *RigidBody) bool {
 		return false
 	}
 	return true
+}
+
+func (s *System) prepareSleepState() {
+	s.bodies.Each(func(body *RigidBody) {
+		if body == nil || !body.Active {
+			return
+		}
+		body.ensureDefaultSleepThreshold()
+		body.wakeIfTransformChanged()
+	})
+}
+
+func (s *System) wakeContacts(manifolds []ContactManifold) {
+	for i := range manifolds {
+		manifold := &manifolds[i]
+		if manifold.Count == 0 {
+			continue
+		}
+		aSleeping := manifold.BodyA != nil && manifold.BodyA.Simulation.IsSleeping
+		bSleeping := manifold.BodyB != nil && manifold.BodyB.Simulation.IsSleeping
+		if aSleeping && manifold.BodyB.canWakeOnContact() {
+			manifold.BodyA.Wake()
+		}
+		if bSleeping && manifold.BodyA.canWakeOnContact() {
+			manifold.BodyB.Wake()
+		}
+	}
+}
+
+func (s *System) updateSleepState(dt matrix.Float) {
+	s.bodies.Each(func(body *RigidBody) {
+		if body == nil || !body.Active {
+			return
+		}
+		if !body.canAutoSleep() {
+			body.Simulation.SleepTimer = 0
+			body.recordSleepTransform()
+			return
+		}
+		if body.Simulation.IsSleeping {
+			body.recordSleepTransform()
+			return
+		}
+		if body.isBelowSleepVelocity() {
+			body.Simulation.SleepTimer += dt
+			if body.Simulation.SleepTimer >= body.sleepThreshold() {
+				body.Sleep()
+				return
+			}
+		} else {
+			body.Simulation.SleepTimer = 0
+		}
+		body.recordSleepTransform()
+	})
 }

@@ -18,6 +18,12 @@ const (
 	DefaultCollisionMask  = 1 << DefaultCollisionGroup
 )
 
+const (
+	DefaultSleepThreshold       = matrix.Float(0.5)
+	defaultLinearSleepVelocity  = matrix.Float(0.05)
+	defaultAngularSleepVelocity = matrix.Float(0.05)
+)
+
 type RigidBody struct {
 	Transform   matrix.Transform
 	MotionState MotionState
@@ -53,12 +59,16 @@ type CollisionInfo struct {
 }
 
 type SimulationState struct {
-	Type            RigidBodyType
-	SleepThreshold  matrix.Float
-	SleepTimer      matrix.Float
-	IsSleeping      bool
-	IsFixedRotation bool
-	IsFixedPosition bool
+	Type             RigidBodyType
+	SleepThreshold   matrix.Float
+	SleepTimer       matrix.Float
+	IsSleeping       bool
+	IsFixedRotation  bool
+	IsFixedPosition  bool
+	lastPosition     matrix.Vec3
+	lastRotation     matrix.Vec3
+	lastScale        matrix.Vec3
+	hasLastTransform bool
 }
 
 func (r *RigidBody) poolLocation() int {
@@ -80,6 +90,8 @@ func (r *RigidBody) IsKinematic() bool {
 func (r *RigidBody) SetDynamic(mass matrix.Float, inertia matrix.Vec3) {
 	r.Active = true
 	r.Simulation.Type = RigidBodyTypeDynamic
+	r.Wake()
+	r.ensureDefaultSleepThreshold()
 	r.SetMass(mass, inertia)
 	r.ensureDefaultCollisionFilter()
 }
@@ -87,6 +99,7 @@ func (r *RigidBody) SetDynamic(mass matrix.Float, inertia matrix.Vec3) {
 func (r *RigidBody) SetStatic() {
 	r.Active = true
 	r.Simulation.Type = RigidBodyTypeStatic
+	r.Wake()
 	r.SetMass(0, matrix.Vec3Zero())
 	r.MotionState = MotionState{}
 	r.ensureDefaultCollisionFilter()
@@ -98,6 +111,7 @@ func (r *RigidBody) SetStatic() {
 func (r *RigidBody) SetKinematic() {
 	r.Active = true
 	r.Simulation.Type = RigidBodyTypeKinematic
+	r.Wake()
 	r.SetMass(0, matrix.Vec3Zero())
 	r.ensureDefaultCollisionFilter()
 }
@@ -139,6 +153,9 @@ func (r *RigidBody) Rotation() matrix.Quaternion {
 
 // ApplyForce applies a continuous world-space force at the body's center of mass.
 func (r *RigidBody) ApplyForce(force matrix.Vec3) {
+	if r != nil && !force.IsZero() {
+		r.Wake()
+	}
 	r.applyForce(force, matrix.Vec3Zero())
 }
 
@@ -147,11 +164,17 @@ func (r *RigidBody) ApplyForceAtPoint(force, point matrix.Vec3) {
 	if r == nil {
 		return
 	}
+	if !force.IsZero() {
+		r.Wake()
+	}
 	r.applyForce(force, point.Subtract(r.Transform.WorldPosition()))
 }
 
 // ApplyImpulse applies an immediate world-space impulse at the body's center of mass.
 func (r *RigidBody) ApplyImpulse(impulse matrix.Vec3) {
+	if r != nil && !impulse.IsZero() {
+		r.Wake()
+	}
 	r.applyImpulse(impulse, matrix.Vec3Zero())
 }
 
@@ -160,7 +183,29 @@ func (r *RigidBody) ApplyImpulseAtPoint(impulse, point matrix.Vec3) {
 	if r == nil {
 		return
 	}
+	if !impulse.IsZero() {
+		r.Wake()
+	}
 	r.applyImpulse(impulse, point.Subtract(r.Transform.WorldPosition()))
+}
+
+func (r *RigidBody) Wake() {
+	if r == nil {
+		return
+	}
+	r.Simulation.IsSleeping = false
+	r.Simulation.SleepTimer = 0
+	r.recordSleepTransform()
+}
+
+func (r *RigidBody) Sleep() {
+	if r == nil || !r.canAutoSleep() {
+		return
+	}
+	r.Simulation.IsSleeping = true
+	r.Simulation.SleepTimer = r.sleepThreshold()
+	r.MotionState = MotionState{}
+	r.recordSleepTransform()
 }
 
 func (r *RigidBody) applyForce(force, rOffset matrix.Vec3) {
@@ -226,6 +271,55 @@ func (r *RigidBody) ensureDefaultCollisionFilter() {
 		r.Collision.Group = DefaultCollisionGroup
 		r.Collision.Mask = DefaultCollisionMask
 	}
+}
+
+func (r *RigidBody) ensureDefaultSleepThreshold() {
+	if r.Simulation.SleepThreshold <= 0 {
+		r.Simulation.SleepThreshold = DefaultSleepThreshold
+	}
+}
+
+func (r *RigidBody) sleepThreshold() matrix.Float {
+	if r.Simulation.SleepThreshold > 0 {
+		return r.Simulation.SleepThreshold
+	}
+	return DefaultSleepThreshold
+}
+
+func (r *RigidBody) canAutoSleep() bool {
+	return r != nil && r.Active && r.IsDynamic()
+}
+
+func (r *RigidBody) canWakeOnContact() bool {
+	return r != nil && r.Active && !r.Simulation.IsSleeping && !r.IsStatic()
+}
+
+func (r *RigidBody) isBelowSleepVelocity() bool {
+	linearLimit := defaultLinearSleepVelocity * defaultLinearSleepVelocity
+	angularLimit := defaultAngularSleepVelocity * defaultAngularSleepVelocity
+	return r.MotionState.LinearVelocity.LengthSquared() <= linearLimit &&
+		r.MotionState.AngularVelocity.LengthSquared() <= angularLimit
+}
+
+func (r *RigidBody) wakeIfTransformChanged() {
+	if r == nil || !r.Simulation.IsSleeping || !r.Simulation.hasLastTransform {
+		return
+	}
+	if !r.Simulation.lastPosition.Equals(r.Transform.WorldPosition()) ||
+		!r.Simulation.lastRotation.Equals(r.Transform.WorldRotation()) ||
+		!r.Simulation.lastScale.Equals(r.Transform.WorldScale()) {
+		r.Wake()
+	}
+}
+
+func (r *RigidBody) recordSleepTransform() {
+	if r == nil {
+		return
+	}
+	r.Simulation.lastPosition = r.Transform.WorldPosition()
+	r.Simulation.lastRotation = r.Transform.WorldRotation()
+	r.Simulation.lastScale = r.Transform.WorldScale()
+	r.Simulation.hasLastTransform = true
 }
 
 func (r *RigidBody) WorldAABB() AABB {

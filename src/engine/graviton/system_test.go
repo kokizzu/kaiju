@@ -133,6 +133,92 @@ func TestSystemRaycastNoHit(t *testing.T) {
 	}
 }
 
+func TestSystemDynamicBodySleepsAtRest(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	body := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	body.Simulation.SleepThreshold = 0.2
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 0.1)
+	if body.Simulation.IsSleeping {
+		t.Fatal("expected body to remain awake before sleep threshold")
+	}
+	system.Step(workGroup, threads, 0.1)
+
+	if !body.Simulation.IsSleeping {
+		t.Fatalf("expected resting body to sleep after threshold, timer %f", body.Simulation.SleepTimer)
+	}
+}
+
+func TestSystemDoesNotAutoSleepStaticOrKinematicBodies(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	staticBody := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeStatic)
+	kinematicBody := addSystemSphere(&system, matrix.Vec3{3, 0, 0}, RigidBodyTypeKinematic)
+	staticBody.Simulation.SleepThreshold = 0.1
+	kinematicBody.Simulation.SleepThreshold = 0.1
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 1)
+
+	if staticBody.Simulation.IsSleeping {
+		t.Fatal("expected static body not to auto sleep")
+	}
+	if kinematicBody.Simulation.IsSleeping {
+		t.Fatal("expected kinematic body not to auto sleep")
+	}
+}
+
+func TestSystemTransformChangeWakesSleepingBody(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	body := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	body.Sleep()
+	body.Transform.SetPosition(matrix.Vec3{1, 0, 0})
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 0)
+
+	if body.Simulation.IsSleeping {
+		t.Fatal("expected transform change to wake sleeping body")
+	}
+}
+
+func TestSystemContactWithAwakeBodyWakesSleepingBody(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	sleeping := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	awake := addSystemSphere(&system, matrix.Vec3{1.5, 0, 0}, RigidBodyTypeDynamic)
+	sleeping.Sleep()
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 0)
+
+	if sleeping.Simulation.IsSleeping {
+		t.Fatal("expected contact with awake dynamic body to wake sleeping body")
+	}
+	if awake.Simulation.IsSleeping {
+		t.Fatal("expected awake body to remain awake")
+	}
+}
+
 func addSystemSphere(system *System, position matrix.Vec3, bodyType RigidBodyType) *RigidBody {
 	body := system.NewBody()
 	body.Active = true

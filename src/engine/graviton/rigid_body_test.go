@@ -86,3 +86,19 @@ func TestRigidBodyApplyImpulseAtPointChangesAngularVelocityImmediately(t *testin
 		t.Fatalf("expected angular velocity %v, got %v", expectedAngular, body.MotionState.AngularVelocity)
 	}
 }
+
+func TestRigidBodyApplyImpulseWakesSleepingBody(t *testing.T) {
+	body := testRigidBody(Shape{}, matrix.Vec3Zero())
+	body.SetMass(2, matrix.Vec3One())
+	body.Sleep()
+
+	body.ApplyImpulse(matrix.Vec3{4, 0, 0})
+
+	expected := matrix.Vec3{2, 0, 0}
+	if body.Simulation.IsSleeping {
+		t.Fatal("expected impulse to wake body")
+	}
+	if !matrix.Vec3ApproxTo(body.MotionState.LinearVelocity, expected, 0.0001) {
+		t.Fatalf("expected linear velocity %v, got %v", expected, body.MotionState.LinearVelocity)
+	}
+}

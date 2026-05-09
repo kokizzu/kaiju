@@ -64,11 +64,23 @@ func (r *RigidBody) IsStatic() bool {
 
 func (r *RigidBody) SetMass(mass matrix.Float, inertia matrix.Vec3) {
 	r.Mass.Mass = mass
-	r.Mass.inverseMass = 1.0 / mass
+	if mass > 0 {
+		r.Mass.inverseMass = 1.0 / mass
+	} else {
+		r.Mass.inverseMass = 0
+	}
 	r.Mass.Inertia = inertia
-	r.Mass.inverseInertia = inertia.Inverse()
+	r.Mass.inverseInertia = matrix.Vec3{}
+	for i := range r.Mass.inverseInertia {
+		if inertia[i] > 0 {
+			r.Mass.inverseInertia[i] = 1.0 / inertia[i]
+		}
+	}
 }
 
 func (r *RigidBody) WorldAABB() AABB {
-	return AABB(r.Collision.Shape).Transform(r.Transform.WorldMatrix())
+	if r.Collision.LocalAABB.Type == ShapeTypeAABB {
+		return r.Collision.LocalAABB.Transform(r.Transform.WorldMatrix())
+	}
+	return shapeWorldAABB(worldShape(r))
 }

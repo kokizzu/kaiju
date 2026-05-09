@@ -9,7 +9,7 @@ func (s *Shape) SetCapsule(center matrix.Vec3, radius matrix.Float, height matri
 	s.Center = center
 	s.Radius = radius
 	s.Height = height
-	s.Direction = direction
+	s.Direction = safeNormal(direction, matrix.Vec3Up())
 }
 
 func NewCapsule(center matrix.Vec3, radius matrix.Float, height matrix.Float, direction matrix.Vec3) Capsule {

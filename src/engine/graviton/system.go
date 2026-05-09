@@ -15,8 +15,9 @@ type System struct {
 	bodies pooling.PoolGroup[RigidBody]
 	// This is a singular vector at the moment, I'll be making
 	// multiple gravitational sources in the future
-	gravity    matrix.Vec3
-	broadPhase SweepPrune
+	gravity     matrix.Vec3
+	broadPhase  SweepPrune
+	narrowPhase NarrowPhase
 }
 
 func (s *System) Initialize() {
@@ -52,11 +53,14 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 	})
 	s.broadPhase.RebuildParallel(&s.bodies, threads)
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
-	for _, pair := range pairs {
-		_ = pair
-		// TODO: Narrow-phase collision detection
-		// TODO: Collision resolution
-	}
+	s.narrowPhase.Collide(pairs, threads)
+	// TODO: Collision resolution
+}
+
+// Contacts returns the contact manifolds generated during the most recent Step.
+// The returned slice is owned by the System and is reused on the next Step.
+func (s *System) Contacts() []ContactManifold {
+	return s.narrowPhase.Manifolds()
 }
 
 func (s *System) canBroadPhaseCollide(a, b *RigidBody) bool {

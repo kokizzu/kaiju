@@ -9,6 +9,7 @@ type Sphere Shape
 
 func (s *Shape) SetSphere(center matrix.Vec3, radius matrix.Float) {
 	s.Type = ShapeTypeSphere
+	s.Center = center
 	s.Radius = radius
 }
 

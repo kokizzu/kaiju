@@ -10,8 +10,10 @@ type Cylinder Shape
 
 func (s *Shape) SetCylinder(center matrix.Vec3, radius matrix.Float, height matrix.Float, direction matrix.Vec3) {
 	s.Type = ShapeTypeCylinder
+	s.Center = center
 	s.Radius = radius
 	s.Height = height
+	s.Direction = safeNormal(direction, matrix.Vec3Up())
 }
 
 func NewCylinder(center matrix.Vec3, radius matrix.Float, height matrix.Float, direction matrix.Vec3) Cylinder {

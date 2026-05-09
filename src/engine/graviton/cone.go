@@ -6,8 +6,10 @@ type Cone Shape
 
 func (s *Shape) SetCone(center matrix.Vec3, radius matrix.Float, height matrix.Float, direction matrix.Vec3) {
 	s.Type = ShapeTypeCone
+	s.Center = center
 	s.Radius = radius
 	s.Height = height
+	s.Direction = safeNormal(direction, matrix.Vec3Up())
 }
 
 func NewCone(center matrix.Vec3, radius matrix.Float, height matrix.Float, direction matrix.Vec3) Cone {

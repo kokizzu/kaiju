@@ -140,7 +140,7 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 			body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
 		}
 		if !body.Simulation.IsFixedRotation {
-			body.Transform.AddRotation(ms.AngularVelocity.Scale(dt))
+			body.Transform.SetRotation(integrateAngularVelocity(body.Transform.Rotation(), ms.AngularVelocity, dt))
 		}
 		ms.Acceleration = matrix.Vec3{}
 		ms.AngularAcceleration = matrix.Vec3{}
@@ -231,4 +231,17 @@ func (s *System) updateSleepState(dt matrix.Float) {
 		}
 		body.recordSleepTransform()
 	})
+}
+
+func integrateAngularVelocity(rotation, angularVelocity matrix.Vec3, dt matrix.Float) matrix.Vec3 {
+	speed := angularVelocity.Length()
+	if speed <= matrix.FloatSmallestNonzero || dt <= 0 {
+		return rotation
+	}
+	axis := angularVelocity.Scale(1.0 / speed)
+	delta := matrix.QuaternionAxisAngle(axis, speed*dt)
+	current := matrix.QuaternionFromEuler(rotation)
+	next := delta.Multiply(current)
+	next.Normalize()
+	return next.ToEuler()
 }

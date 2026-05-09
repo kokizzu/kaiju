@@ -37,6 +37,7 @@
 package graviton
 
 import (
+	"math"
 	"testing"
 
 	"kaijuengine.com/matrix"
@@ -312,6 +313,40 @@ func TestSystemContactWithAwakeBodyWakesSleepingBody(t *testing.T) {
 	}
 	if awake.Simulation.IsSleeping {
 		t.Fatal("expected awake body to remain awake")
+	}
+}
+
+func TestSystemStepIntegratesAngularVelocityAsRadians(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+
+	body := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	body.MotionState.AngularVelocity = matrix.NewVec3(matrix.Float(math.Pi), 0, 0)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 0.5)
+
+	if !matrix.Vec3ApproxTo(body.Transform.Rotation(), matrix.NewVec3(90, 0, 0), 0.0001) {
+		t.Fatalf("expected half second at pi rad/s to rotate 90 degrees, got %v", body.Transform.Rotation())
+	}
+}
+
+func TestIntegrateAngularVelocityUsesWorldSpaceAxis(t *testing.T) {
+	rotation := matrix.NewVec3(0, 90, 0)
+	angularVelocity := matrix.NewVec3(matrix.Float(math.Pi), 0, 0)
+
+	actual := matrix.QuaternionFromEuler(integrateAngularVelocity(rotation, angularVelocity, 0.5))
+	expected := matrix.QuaternionAxisAngle(matrix.Vec3Right(), matrix.Float(math.Pi/2)).
+		Multiply(matrix.QuaternionFromEuler(rotation))
+
+	v := matrix.NewVec3(0.25, 0.5, -1)
+	actualDirection := actual.MultiplyVec3(v)
+	expectedDirection := expected.MultiplyVec3(v)
+	if !matrix.Vec3ApproxTo(actualDirection, expectedDirection, 0.0001) {
+		t.Fatalf("expected angular velocity to rotate around world axis, got %v, want %v", actualDirection, expectedDirection)
 	}
 }
 

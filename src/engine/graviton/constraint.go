@@ -43,21 +43,23 @@ type ConstraintType uint8
 const (
 	ConstraintTypeUnknown ConstraintType = iota
 	ConstraintTypeGeneric
+	ConstraintTypeDistance
 )
 
 // Constraint stores the lifecycle and endpoints for a future Graviton
 // constraint solver. BodyA and BodyB form a body-body constraint; either body
 // may be nil to represent a body-world constraint.
 type Constraint struct {
-	Type    ConstraintType
-	BodyA   *RigidBody
-	BodyB   *RigidBody
-	Rows    []ConstraintSolverRow
-	Active  bool
-	Enabled bool
-	poolId  pooling.PoolGroupId
-	id      pooling.PoolIndex
-	pooled  bool
+	Type     ConstraintType
+	BodyA    *RigidBody
+	BodyB    *RigidBody
+	Rows     []ConstraintSolverRow
+	Distance *DistanceJoint
+	Active   bool
+	Enabled  bool
+	poolId   pooling.PoolGroupId
+	id       pooling.PoolIndex
+	pooled   bool
 }
 
 func (c *Constraint) IsBodyBody() bool {
@@ -92,6 +94,10 @@ func (c *Constraint) IsValid() bool {
 func (c *Constraint) SetBodies(bodyA, bodyB *RigidBody) {
 	c.BodyA = bodyA
 	c.BodyB = bodyB
+	if c.Distance != nil {
+		c.Distance.BodyA = bodyA
+		c.Distance.BodyB = bodyB
+	}
 	c.disableIfBodiesInvalid()
 }
 
@@ -111,6 +117,10 @@ func (c *Constraint) detachBody(body *RigidBody) {
 	}
 	if c.BodyB == body {
 		c.BodyB = nil
+	}
+	if c.Distance != nil {
+		c.Distance.BodyA = c.BodyA
+		c.Distance.BodyB = c.BodyB
 	}
 	c.Active = false
 	c.Enabled = false

@@ -67,6 +67,7 @@ type collisionIsland struct {
 type CollisionSolver struct {
 	VelocityIterations int
 	PositionIterations int
+	DeltaTime          matrix.Float
 	Restitution        matrix.Float
 	StaticFriction     matrix.Float
 	DynamicFriction    matrix.Float
@@ -88,6 +89,7 @@ type CollisionSolver struct {
 func (s *CollisionSolver) Initialize() {
 	s.VelocityIterations = defaultVelocityIterations
 	s.PositionIterations = defaultPositionIterations
+	s.DeltaTime = defaultDistanceJointTimeStep
 	s.Restitution = defaultRestitution
 	s.StaticFriction = defaultStaticFriction
 	s.DynamicFriction = defaultDynamicFriction
@@ -317,6 +319,9 @@ func (s *CollisionSolver) union(a, b int) {
 func (s *CollisionSolver) solveIslandRange(manifolds []ContactManifold, constraints []*Constraint, start, end int) {
 	for islandIndex := start; islandIndex < end; islandIndex++ {
 		island := &s.islands[islandIndex]
+		for _, constraintIndex := range island.constraints {
+			s.prepareConstraint(constraints[constraintIndex])
+		}
 		for range s.VelocityIterations {
 			for _, manifoldIndex := range island.manifolds {
 				s.solveVelocity(&manifolds[manifoldIndex])
@@ -329,7 +334,19 @@ func (s *CollisionSolver) solveIslandRange(manifolds []ContactManifold, constrai
 			for _, manifoldIndex := range island.manifolds {
 				s.solvePosition(&manifolds[manifoldIndex])
 			}
+			for _, constraintIndex := range island.constraints {
+				s.solveConstraintPosition(constraints[constraintIndex])
+			}
 		}
+	}
+}
+
+func (s *CollisionSolver) prepareConstraint(constraint *Constraint) {
+	if constraint == nil {
+		return
+	}
+	if constraint.Type == ConstraintTypeDistance && constraint.Distance != nil {
+		constraint.Distance.prepare(s.DeltaTime)
 	}
 }
 
@@ -337,8 +354,21 @@ func (s *CollisionSolver) solveConstraint(constraint *Constraint) {
 	if constraint == nil {
 		return
 	}
+	if constraint.Type == ConstraintTypeDistance && constraint.Distance != nil {
+		constraint.Distance.solveVelocity()
+		return
+	}
 	for i := range constraint.Rows {
 		constraint.Rows[i].Solve()
+	}
+}
+
+func (s *CollisionSolver) solveConstraintPosition(constraint *Constraint) {
+	if constraint == nil {
+		return
+	}
+	if constraint.Type == ConstraintTypeDistance && constraint.Distance != nil {
+		constraint.Distance.solvePosition()
 	}
 }
 

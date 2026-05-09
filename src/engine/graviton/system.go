@@ -128,8 +128,60 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 	stageConstraint.Active = constraint.Active
 	stageConstraint.Enabled = constraint.Enabled
 	stageConstraint.Rows = append(stageConstraint.Rows, constraint.Rows...)
+	if constraint.Distance != nil {
+		distance := *constraint.Distance
+		distance.BodyA = stageConstraint.BodyA
+		distance.BodyB = stageConstraint.BodyB
+		distance.constraint = stageConstraint
+		stageConstraint.Distance = &distance
+	}
 	stageConstraint.disableIfBodiesInvalid()
 	return stageConstraint
+}
+
+func (s *System) NewDistanceJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB matrix.Vec3) *DistanceJoint {
+	constraint := s.NewConstraint(ConstraintTypeDistance, bodyA, bodyB)
+	joint := NewDistanceJoint(bodyA, bodyB, localAnchorA, localAnchorB)
+	joint.constraint = constraint
+	constraint.Distance = joint
+	return joint
+}
+
+func (s *System) NewDistanceJointAtWorldAnchors(bodyA, bodyB *RigidBody, worldAnchorA, worldAnchorB matrix.Vec3) *DistanceJoint {
+	return s.NewDistanceJoint(
+		bodyA,
+		bodyB,
+		LocalAnchor(bodyA, worldAnchorA),
+		LocalAnchor(bodyB, worldAnchorB),
+	)
+}
+
+func (s *System) NewDistanceJointToWorld(body *RigidBody, localAnchor, worldAnchor matrix.Vec3) *DistanceJoint {
+	return s.NewDistanceJoint(body, nil, localAnchor, worldAnchor)
+}
+
+func (s *System) AddDistanceJoint(joint *DistanceJoint) *DistanceJoint {
+	if joint == nil {
+		return nil
+	}
+	if joint.constraint != nil && joint.constraint.pooled {
+		joint.constraint.disableIfBodiesInvalid()
+		return joint
+	}
+	constraint := s.NewConstraint(ConstraintTypeDistance, joint.BodyA, joint.BodyB)
+	stageJoint := *joint
+	stageJoint.BodyA = constraint.BodyA
+	stageJoint.BodyB = constraint.BodyB
+	stageJoint.constraint = constraint
+	constraint.Distance = &stageJoint
+	return &stageJoint
+}
+
+func (s *System) RemoveDistanceJoint(joint *DistanceJoint) {
+	if joint == nil {
+		return
+	}
+	s.RemoveConstraint(joint.constraint)
 }
 
 func (s *System) RemoveConstraint(constraint *Constraint) {
@@ -191,6 +243,7 @@ func (s *System) Clear() {
 
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	dt := matrix.Float(deltaTime)
+	s.solver.DeltaTime = dt
 	s.prepareSleepState()
 	s.bodies.EachParallel("kaiju.phys", workGroup, threads, func(body *RigidBody) {
 		if !body.Active || body.Simulation.IsSleeping || !body.IsDynamic() {

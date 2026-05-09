@@ -42,6 +42,58 @@ func (s *System) Raycast(from, to matrix.Vec3) (Hit, bool) {
 	return closest, true
 }
 
+func (s *System) SphereSweep(from, to matrix.Vec3, radius matrix.Float) (Hit, bool) {
+	if radius < 0 {
+		return Hit{}, false
+	}
+	rayDelta := to.Subtract(from)
+	length := rayDelta.Length()
+	rayDirection := matrix.Vec3Right()
+	if length > contactEpsilon {
+		rayDirection = rayDelta.Scale(1.0 / length)
+	}
+	ray := Ray{
+		Origin:    from,
+		Direction: rayDirection,
+	}
+	closest := Hit{Distance: matrix.Inf(1)}
+	found := false
+	s.bodies.Each(func(body *RigidBody) {
+		if body == nil || !body.Active {
+			return
+		}
+		shape := worldShape(body)
+		if shape.Type == ShapeTypeMesh {
+			return
+		}
+		if hit, ok := sphereSweepStartOverlap(from, radius, shape, rayDirection); ok {
+			hit.Body = body
+			if !found || hit.Distance < closest.Distance {
+				closest = hit
+				found = true
+			}
+			return
+		}
+		if length <= contactEpsilon {
+			return
+		}
+		if _, ok := raycastAABB(ray, expandAABB(body.WorldAABB(), radius), length); !ok {
+			return
+		}
+		hit, ok := sphereSweepShape(ray, shape, length, radius)
+		if !ok || hit.Distance >= closest.Distance {
+			return
+		}
+		hit.Body = body
+		closest = hit
+		found = true
+	})
+	if !found {
+		return Hit{}, false
+	}
+	return closest, true
+}
+
 func raycastShape(ray Ray, shape Shape, length matrix.Float) (Hit, bool) {
 	switch shape.Type {
 	case ShapeTypeSphere:
@@ -59,6 +111,81 @@ func raycastShape(ray Ray, shape Shape, length matrix.Float) (Hit, bool) {
 	default:
 		return Hit{}, false
 	}
+}
+
+func sphereSweepShape(ray Ray, shape Shape, length, radius matrix.Float) (Hit, bool) {
+	switch shape.Type {
+	case ShapeTypeSphere:
+		sphere := Sphere(shape)
+		sphere.Radius += radius
+		return sphereSweepFromExpandedRaycast(ray, Shape(sphere), length, radius)
+	case ShapeTypeAABB:
+		box := expandAABB(AABB(shape), radius)
+		return sphereSweepAABB(ray, box, length, radius)
+	case ShapeTypeOOBB:
+		box := OOBB(shape)
+		box.Extent = box.Extent.Add(matrix.NewVec3XYZ(radius))
+		return sphereSweepOOBB(ray, box, length, radius)
+	case ShapeTypeCapsule:
+		capsule := Capsule(shape)
+		capsule.Radius += radius
+		return sphereSweepFromExpandedRaycast(ray, Shape(capsule), length, radius)
+	case ShapeTypeMesh:
+		return Hit{}, false
+	default:
+		return sphereSweepAABB(ray, expandAABB(shapeWorldAABB(shape), radius), length, radius)
+	}
+}
+
+func sphereSweepStartOverlap(center matrix.Vec3, radius matrix.Float, shape Shape, sweepDirection matrix.Vec3) (Hit, bool) {
+	sweepSphere := Shape{}
+	sweepSphere.SetSphere(center, radius)
+	contact, ok := collideShapes(sweepSphere, shape)
+	if !ok {
+		return Hit{}, false
+	}
+	normal := safeNormal(contact.Normal.Negative(), sweepDirection.Negative())
+	return Hit{
+		Point:    center.Subtract(normal.Scale(radius)),
+		Normal:   normal,
+		Distance: 0,
+	}, true
+}
+
+func sphereSweepFromExpandedRaycast(ray Ray, shape Shape, length, radius matrix.Float) (Hit, bool) {
+	hit, ok := raycastShape(ray, shape, length)
+	if !ok {
+		return Hit{}, false
+	}
+	hit.Point = sphereSweepContactPoint(ray.Point(hit.Distance), hit.Normal, radius)
+	return hit, true
+}
+
+func sphereSweepAABB(ray Ray, box AABB, length, radius matrix.Float) (Hit, bool) {
+	hit, ok := raycastAABB(ray, box, length)
+	if !ok {
+		return Hit{}, false
+	}
+	hit.Point = sphereSweepContactPoint(ray.Point(hit.Distance), hit.Normal, radius)
+	return hit, true
+}
+
+func sphereSweepOOBB(ray Ray, box OOBB, length, radius matrix.Float) (Hit, bool) {
+	hit, ok := raycastOOBB(ray, box, length)
+	if !ok {
+		return Hit{}, false
+	}
+	hit.Point = sphereSweepContactPoint(ray.Point(hit.Distance), hit.Normal, radius)
+	return hit, true
+}
+
+func sphereSweepContactPoint(center, normal matrix.Vec3, radius matrix.Float) matrix.Vec3 {
+	return center.Subtract(normal.Scale(radius))
+}
+
+func expandAABB(box AABB, radius matrix.Float) AABB {
+	box.Extent = box.Extent.Add(matrix.NewVec3XYZ(radius))
+	return box
 }
 
 func raycastSphere(ray Ray, sphere Sphere, length matrix.Float) (Hit, bool) {

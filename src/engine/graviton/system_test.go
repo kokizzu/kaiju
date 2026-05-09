@@ -133,6 +133,66 @@ func TestSystemRaycastNoHit(t *testing.T) {
 	}
 }
 
+func TestSystemSphereSweepNoHit(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	addSystemSphere(&system, matrix.Vec3{0, 3, 0}, RigidBodyTypeStatic)
+
+	if hit, ok := system.SphereSweep(matrix.Vec3Zero(), matrix.Vec3{10, 0, 0}, 0.5); ok {
+		t.Fatalf("expected sphere sweep to miss, got hit %+v", hit)
+	}
+}
+
+func TestSystemSphereSweepReturnsClosestHit(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	farBody := addSystemSphere(&system, matrix.Vec3{4, 0, 0}, RigidBodyTypeStatic)
+	nearBody := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeStatic)
+
+	hit, ok := system.SphereSweep(matrix.Vec3Zero(), matrix.Vec3{10, 0, 0}, 0.5)
+	if !ok {
+		t.Fatal("expected sphere sweep to hit a body")
+	}
+	if hit.Body != nearBody {
+		t.Fatalf("expected sphere sweep to return closest body %p, got %p", nearBody, hit.Body)
+	}
+	if hit.Body == farBody {
+		t.Fatal("expected far body not to be selected")
+	}
+	if !matrix.Approx(hit.Distance, 0.5) {
+		t.Fatalf("expected hit distance 0.5, got %f", hit.Distance)
+	}
+	if !matrix.Vec3ApproxTo(hit.Point, matrix.Vec3{1, 0, 0}, 0.0001) {
+		t.Fatalf("expected hit point at 1,0,0, got %v", hit.Point)
+	}
+	if !matrix.Vec3ApproxTo(hit.Normal, matrix.Vec3Left(), 0.0001) {
+		t.Fatalf("expected hit normal -X, got %v", hit.Normal)
+	}
+}
+
+func TestSystemSphereSweepStartOverlap(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	body := addSystemSphere(&system, matrix.Vec3{0.75, 0, 0}, RigidBodyTypeStatic)
+
+	hit, ok := system.SphereSweep(matrix.Vec3Zero(), matrix.Vec3{10, 0, 0}, 0.5)
+	if !ok {
+		t.Fatal("expected sphere sweep to report start overlap")
+	}
+	if hit.Body != body {
+		t.Fatalf("expected sphere sweep to return overlapping body %p, got %p", body, hit.Body)
+	}
+	if !matrix.Approx(hit.Distance, 0) {
+		t.Fatalf("expected start-overlap distance 0, got %f", hit.Distance)
+	}
+	if !matrix.Vec3ApproxTo(hit.Normal, matrix.Vec3Left(), 0.0001) {
+		t.Fatalf("expected start-overlap normal -X, got %v", hit.Normal)
+	}
+}
+
 func TestSystemDynamicBodySleepsAtRest(t *testing.T) {
 	system := System{}
 	system.Initialize()

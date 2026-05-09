@@ -134,6 +134,23 @@ func TestSystemClearRemovesConstraints(t *testing.T) {
 	}
 }
 
+func TestSystemConstraintsReturnsStoredConstraints(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	constraint := system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+
+	constraints := system.Constraints()
+	if len(constraints) != 1 {
+		t.Fatalf("expected 1 stored constraint, got %d", len(constraints))
+	}
+	if constraints[0] != constraint {
+		t.Fatal("expected Constraints to return the stored constraint")
+	}
+}
+
 func TestSystemRemoveBodyDisablesAttachedConstraints(t *testing.T) {
 	system := System{}
 	system.Initialize()
@@ -161,6 +178,70 @@ func TestSystemRemoveBodyDisablesAttachedConstraints(t *testing.T) {
 	}
 	if !unattached.IsValid() {
 		t.Fatal("expected unrelated constraint to remain valid")
+	}
+}
+
+func TestSystemStepSolvesDistanceJoint(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintPositionIterations = 8
+
+	bodyA := addSystemSphere(&system, matrix.Vec3{-3, 0, 0}, RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{3, 0, 0}, RigidBodyTypeDynamic)
+	bodyA.Collision.Mask = 0
+	bodyB.Collision.Mask = 0
+	bodyA.Simulation.SleepThreshold = 10000
+	bodyB.Simulation.SleepThreshold = 10000
+	system.NewDistanceJoint(bodyA, bodyB, matrix.Vec3Zero(), matrix.Vec3Zero()).SetRestLength(2)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	for range 120 {
+		system.Step(workGroup, threads, 1.0/60.0)
+	}
+
+	if len(system.Constraints()) != 1 {
+		t.Fatalf("expected distance joint to be visible as 1 constraint, got %d", len(system.Constraints()))
+	}
+	distance := bodyA.Transform.WorldPosition().Distance(bodyB.Transform.WorldPosition())
+	if matrix.Abs(distance-2) > 0.02 {
+		t.Fatalf("expected Step to solve distance joint rest length 2, got %f", distance)
+	}
+}
+
+func TestSystemConstraintAndContactSolveTogether(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintVelocityIterations = 8
+	system.ConstraintPositionIterations = 8
+
+	bodyA := addSystemSphere(&system, matrix.Vec3{0, 0, 0}, RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	wall := addSystemSphere(&system, matrix.Vec3{3.5, 0, 0}, RigidBodyTypeStatic)
+	bodyA.Simulation.SleepThreshold = 10000
+	bodyB.Simulation.SleepThreshold = 10000
+	system.NewDistanceJoint(bodyA, bodyB, matrix.Vec3Zero(), matrix.Vec3Zero()).SetRestLength(2)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	for range 30 {
+		system.Step(workGroup, threads, 1.0/60.0)
+	}
+
+	if len(system.Contacts()) == 0 {
+		t.Fatal("expected bodyB and wall to generate a contact during Step")
+	}
+	distance := bodyA.Transform.WorldPosition().Distance(bodyB.Transform.WorldPosition())
+	if matrix.Abs(distance-2) > 0.02 {
+		t.Fatalf("expected constraint to preserve rest length while contacts solve, got %f", distance)
+	}
+	separation := bodyB.Transform.WorldPosition().Distance(wall.Transform.WorldPosition())
+	if separation < 1.99 {
+		t.Fatalf("expected contact solve to separate constrained body from wall, got %f", separation)
 	}
 }
 

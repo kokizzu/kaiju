@@ -46,7 +46,7 @@ func TestDistanceJointMaintainsRestLength(t *testing.T) {
 	system := System{}
 	system.Initialize()
 	system.SetGravity(matrix.Vec3Zero())
-	system.solver.PositionIterations = 8
+	system.ConstraintPositionIterations = 8
 
 	a := addJointBody(&system, matrix.Vec3{-1, 0, 0}, RigidBodyTypeDynamic)
 	b := addJointBody(&system, matrix.Vec3{1, 0, 0}, RigidBodyTypeDynamic)
@@ -71,7 +71,7 @@ func TestDistanceJointDynamicToStaticAnchor(t *testing.T) {
 	system := System{}
 	system.Initialize()
 	system.SetGravity(matrix.Vec3Zero())
-	system.solver.PositionIterations = 8
+	system.ConstraintPositionIterations = 8
 
 	dynamic := addJointBody(&system, matrix.Vec3{0, 0, 0}, RigidBodyTypeDynamic)
 	static := addJointBody(&system, matrix.Vec3{0, 3, 0}, RigidBodyTypeStatic)
@@ -98,7 +98,7 @@ func TestDistanceJointHandlesZeroLengthSafely(t *testing.T) {
 	system := System{}
 	system.Initialize()
 	system.SetGravity(matrix.Vec3Zero())
-	system.solver.PositionIterations = 8
+	system.ConstraintPositionIterations = 8
 
 	a := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
 	b := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
@@ -124,7 +124,7 @@ func TestDistanceJointHandlesZeroLengthSafely(t *testing.T) {
 func TestDistanceJointWithGravityDoesNotStretchBeyondTolerance(t *testing.T) {
 	system := System{}
 	system.Initialize()
-	system.solver.PositionIterations = 8
+	system.ConstraintPositionIterations = 8
 
 	body := addJointBody(&system, matrix.Vec3{0, -2, 0}, RigidBodyTypeDynamic)
 	system.NewDistanceJointToWorld(body, matrix.Vec3Zero(), matrix.Vec3Zero()).SetRestLength(2)

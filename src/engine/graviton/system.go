@@ -52,11 +52,15 @@ type System struct {
 	constraints pooling.PoolGroup[Constraint]
 	// This is a singular vector at the moment, I'll be making
 	// multiple gravitational sources in the future
-	gravity           matrix.Vec3
-	broadPhase        SweepPrune
-	narrowPhase       NarrowPhase
-	solver            CollisionSolver
-	constraintScratch []*Constraint
+	gravity matrix.Vec3
+	// Constraint iteration counts are shared by contact and constraint solving
+	// because System.Step solves them together in the same islands.
+	ConstraintVelocityIterations int
+	ConstraintPositionIterations int
+	broadPhase                   SweepPrune
+	narrowPhase                  NarrowPhase
+	solver                       CollisionSolver
+	constraintScratch            []*Constraint
 }
 
 func (s *System) Initialize() {
@@ -64,6 +68,8 @@ func (s *System) Initialize() {
 	s.gravity = matrix.Vec3Up().Scale(standardGravity)
 	s.broadPhase.Initialize(1024)
 	s.solver.Initialize()
+	s.ConstraintVelocityIterations = s.solver.VelocityIterations
+	s.ConstraintPositionIterations = s.solver.PositionIterations
 }
 
 func (s *System) SetGravity(gravity matrix.Vec3) {
@@ -244,6 +250,8 @@ func (s *System) Clear() {
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	dt := matrix.Float(deltaTime)
 	s.solver.DeltaTime = dt
+	s.solver.VelocityIterations = s.constraintVelocityIterations()
+	s.solver.PositionIterations = s.constraintPositionIterations()
 	s.prepareSleepState()
 	s.bodies.EachParallel("kaiju.phys", workGroup, threads, func(body *RigidBody) {
 		if !body.Active || body.Simulation.IsSleeping || !body.IsDynamic() {
@@ -265,8 +273,12 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 	s.broadPhase.RebuildParallel(&s.bodies, threads)
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
 	manifolds := s.narrowPhase.Collide(pairs, threads)
+	constraints := s.activeConstraints()
 	s.wakeContacts(manifolds)
-	s.solver.SolveWithConstraints(manifolds, s.activeConstraints(), threads)
+	s.wakeConstraints(constraints)
+	// Contacts and constraints are solved as one island problem so linked
+	// bodies share the same velocity and position iteration stream.
+	s.solver.SolveWithConstraints(manifolds, constraints, threads)
 	s.updateSleepState(dt)
 }
 
@@ -274,6 +286,19 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 // The returned slice is owned by the System and is reused on the next Step.
 func (s *System) Contacts() []ContactManifold {
 	return s.narrowPhase.Manifolds()
+}
+
+// Constraints returns the constraints currently stored in the System. The
+// returned slice is owned by the System and is reused on the next constraints
+// query or Step.
+func (s *System) Constraints() []*Constraint {
+	s.constraintScratch = s.constraintScratch[:0]
+	s.constraints.Each(func(constraint *Constraint) {
+		if constraint != nil {
+			s.constraintScratch = append(s.constraintScratch, constraint)
+		}
+	})
+	return s.constraintScratch
 }
 
 func (s *System) activeConstraints() []*Constraint {
@@ -306,6 +331,20 @@ func (s *System) canCollide(a, b *RigidBody) bool {
 	return true
 }
 
+func (s *System) constraintVelocityIterations() int {
+	if s.ConstraintVelocityIterations < 0 {
+		return 0
+	}
+	return s.ConstraintVelocityIterations
+}
+
+func (s *System) constraintPositionIterations() int {
+	if s.ConstraintPositionIterations < 0 {
+		return 0
+	}
+	return s.ConstraintPositionIterations
+}
+
 func (s *System) prepareSleepState() {
 	s.bodies.Each(func(body *RigidBody) {
 		if body == nil || !body.Active {
@@ -330,6 +369,22 @@ func (s *System) wakeContacts(manifolds []ContactManifold) {
 		if bSleeping && manifold.BodyA.canWakeOnContact() {
 			manifold.BodyB.Wake()
 		}
+	}
+}
+
+func (s *System) wakeConstraints(constraints []*Constraint) {
+	for _, constraint := range constraints {
+		if constraint == nil {
+			continue
+		}
+		wakeSleepingConstraintEndpoint(constraint.BodyA, constraint.BodyB)
+		wakeSleepingConstraintEndpoint(constraint.BodyB, constraint.BodyA)
+	}
+}
+
+func wakeSleepingConstraintEndpoint(sleeping, other *RigidBody) {
+	if sleeping != nil && sleeping.Simulation.IsSleeping && other.canWakeOnContact() {
+		sleeping.Wake()
 	}
 }
 

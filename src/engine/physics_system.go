@@ -40,6 +40,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/physics"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
@@ -126,6 +127,20 @@ func (p *StagePhysics) AddEntity(entity *Entity, body *physics.RigidBody) {
 	})
 }
 
+func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape graviton.Shape) {
+	defer tracing.NewRegion("StagePhysics.AddEntityShape").End()
+	collisionShape := bulletShapeFromGraviton(shape)
+	if collisionShape == nil {
+		slog.Error("failed to create a physics collision shape", "shapeType", shape.Type)
+		return
+	}
+	t := &entity.Transform
+	inertia := collisionShape.CalculateLocalInertia(mass)
+	motion := physics.NewDefaultMotionState(matrix.QuaternionFromEuler(t.Rotation()), t.Position())
+	body := physics.NewRigidBody(mass, motion, collisionShape, inertia)
+	p.AddEntity(entity, body)
+}
+
 func (p *StagePhysics) Update(threads *concurrent.Threads, deltaTime float64) {
 	defer tracing.NewRegion("StagePhysics.Update").End()
 	p.world.StepSimulation(float32(deltaTime))
@@ -143,4 +158,22 @@ func (p *StagePhysics) Update(threads *concurrent.Threads, deltaTime float64) {
 	}
 	threads.AddWork(works)
 	wg.Wait()
+}
+
+func bulletShapeFromGraviton(shape graviton.Shape) *physics.CollisionShape {
+	switch shape.Type {
+	case graviton.ShapeTypeAABB, graviton.ShapeTypeOOBB:
+		return &physics.NewBoxShape(shape.Extent).CollisionShape
+	case graviton.ShapeTypeSphere:
+		return &physics.NewSphereShape(float32(shape.Radius)).CollisionShape
+	case graviton.ShapeTypeCapsule:
+		return &physics.NewCapsuleShape(float32(shape.Radius), float32(shape.Height)).CollisionShape
+	case graviton.ShapeTypeCylinder:
+		halfExtents := matrix.NewVec3(shape.Radius, shape.Height*0.5, shape.Radius)
+		return &physics.NewCylinderShape(halfExtents).CollisionShape
+	case graviton.ShapeTypeCone:
+		return &physics.NewConeShape(float32(shape.Radius), float32(shape.Height)).CollisionShape
+	default:
+		return nil
+	}
 }

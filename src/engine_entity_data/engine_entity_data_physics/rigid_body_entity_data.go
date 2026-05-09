@@ -41,10 +41,9 @@ import (
 
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/encoding/pod"
-	"kaijuengine.com/engine/physics"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine_entity_data/content_id"
 	"kaijuengine.com/matrix"
-	"kaijuengine.com/rendering/loaders/kaiju_mesh"
 )
 
 var bindingKey = ""
@@ -83,63 +82,36 @@ type RigidBodyEntityData struct {
 
 func (r RigidBodyEntityData) Init(e *engine.Entity, host *engine.Host) {
 	host.StartPhysics()
-	t := &e.Transform
-	scale := t.Scale()
-	var shape *physics.CollisionShape
-	switch r.Shape {
-	case ShapeBox:
-		size := r.Extent.Multiply(scale)
-		shape = &physics.NewBoxShape(size).CollisionShape
-	case ShapeSphere:
-		rad := r.Radius * float32(scale.LongestAxisValue())
-		shape = &physics.NewSphereShape(rad).CollisionShape
-	case ShapeCapsule:
-		rad := r.Radius * float32(scale.LongestAxisValue())
-		height := r.Height * scale.Y()
-		shape = &physics.NewCapsuleShape(rad, height).CollisionShape
-	case ShapeCylinder:
-		size := r.Extent.Multiply(scale)
-		shape = &physics.NewCylinderShape(size).CollisionShape
-	case ShapeCone:
-		rad := r.Radius * float32(scale.LongestAxisValue())
-		height := r.Height * scale.Y()
-		shape = &physics.NewConeShape(rad, height).CollisionShape
-	case ShapeMesh:
-		data, err := host.AssetDatabase().Read(string(r.AssetKey))
-		onErr := func() {
-			slog.Error("Failed to read the asset for the physics mesh shape, falling back to a box", "error", err)
-			size := r.Extent.Multiply(e.Transform.Scale())
-			shape = &physics.NewBoxShape(size).CollisionShape
-		}
-		if err == nil {
-			scale := e.Transform.WorldScale()
-			km, err := kaiju_mesh.Deserialize(data)
-			if err == nil {
-				verts := make([]float32, len(km.Verts)*3)
-				idx := 0
-				for i := range km.Verts {
-					// TODO:  This should probably use the transformation matrix
-					// to also account for rotation, translation likely isn't needed
-					pos := km.Verts[i].Position.Multiply(scale)
-					verts[idx] = pos[matrix.Vx]
-					verts[idx+1] = pos[matrix.Vy]
-					verts[idx+2] = pos[matrix.Vz]
-					idx += 3
-				}
-				triangleIVA := physics.NewTriangleIndexVertexArray(km.Indexes, verts)
-				shape = &physics.NewBvhTriangleMeshShape(triangleIVA, false).CollisionShape
-			} else {
-				onErr()
-			}
-		} else {
-			onErr()
-		}
-	}
+	shape := r.gravitonShape(e.Transform.Scale())
 	if r.IsStatic {
 		r.Mass = 0
 	}
-	inertia := shape.CalculateLocalInertia(r.Mass)
-	motion := physics.NewDefaultMotionState(matrix.QuaternionFromEuler(t.Rotation()), t.Position())
-	body := physics.NewRigidBody(r.Mass, motion, shape, inertia)
-	host.Physics().AddEntity(e, body)
+	host.Physics().AddEntityShape(e, r.Mass, shape)
+}
+
+func (r RigidBodyEntityData) gravitonShape(scale matrix.Vec3) graviton.Shape {
+	scale = matrix.Vec3Abs(scale)
+	switch r.Shape {
+	case ShapeBox:
+		return graviton.NewBoxShape(r.Extent.Multiply(scale))
+	case ShapeSphere:
+		radius := matrix.Float(r.Radius) * scale.LongestAxisValue()
+		return graviton.NewSphereShape(radius)
+	case ShapeCapsule:
+		radius := matrix.Float(r.Radius) * scale.LongestAxisValue()
+		height := matrix.Float(r.Height) * scale.Y()
+		return graviton.NewCapsuleShape(radius, height)
+	case ShapeCylinder:
+		size := r.Extent.Multiply(scale)
+		radius := matrix.Max(size.X(), size.Z())
+		height := size.Y() * 2
+		return graviton.NewCylinderShape(radius, height)
+	case ShapeCone:
+		radius := matrix.Float(r.Radius) * scale.LongestAxisValue()
+		height := matrix.Float(r.Height) * scale.Y()
+		return graviton.NewConeShape(radius, height)
+	case ShapeMesh:
+		slog.Warn("graviton mesh physics shape is not implemented, falling back to box", "assetKey", r.AssetKey)
+	}
+	return graviton.NewBoxShape(r.Extent.Multiply(scale))
 }

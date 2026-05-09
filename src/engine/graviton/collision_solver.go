@@ -57,7 +57,8 @@ const (
 )
 
 type collisionIsland struct {
-	manifolds []int
+	manifolds   []int
+	constraints []int
 }
 
 // CollisionSolver resolves narrow-phase contacts with an iterative impulse
@@ -73,14 +74,15 @@ type CollisionSolver struct {
 	PenetrationSlop    matrix.Float
 	MaxCorrection      matrix.Float
 
-	islands          []collisionIsland
-	writableBodies   []*RigidBody
-	parents          []int
-	ranks            []uint8
-	bodyIndex        map[*RigidBody]int
-	rootToIsland     map[int]int
-	eligibleContacts []int
-	initialized      bool
+	islands             []collisionIsland
+	writableBodies      []*RigidBody
+	parents             []int
+	ranks               []uint8
+	bodyIndex           map[*RigidBody]int
+	rootToIsland        map[int]int
+	eligibleContacts    []int
+	eligibleConstraints []int
+	initialized         bool
 }
 
 func (s *CollisionSolver) Initialize() {
@@ -106,30 +108,36 @@ func (s *CollisionSolver) Reset() {
 	}
 	for i := range s.islands {
 		s.islands[i].manifolds = s.islands[i].manifolds[:0]
+		s.islands[i].constraints = s.islands[i].constraints[:0]
 	}
 	s.islands = s.islands[:0]
 	s.writableBodies = s.writableBodies[:0]
 	s.parents = s.parents[:0]
 	s.ranks = s.ranks[:0]
 	s.eligibleContacts = s.eligibleContacts[:0]
+	s.eligibleConstraints = s.eligibleConstraints[:0]
 }
 
 func (s *CollisionSolver) Solve(manifolds []ContactManifold, threads *concurrent.Threads) {
-	if len(manifolds) == 0 {
+	s.SolveWithConstraints(manifolds, nil, threads)
+}
+
+func (s *CollisionSolver) SolveWithConstraints(manifolds []ContactManifold, constraints []*Constraint, threads *concurrent.Threads) {
+	if len(manifolds) == 0 && len(constraints) == 0 {
 		return
 	}
 	s.ensureInitialized()
-	s.buildIslands(manifolds)
+	s.buildIslands(manifolds, constraints)
 	if len(s.islands) == 0 {
 		return
 	}
 	workers := broadPhaseWorkerCount(threads, len(s.islands), solverMinIslandsPerJob)
 	if workers == 1 {
-		s.solveIslandRange(manifolds, 0, len(s.islands))
+		s.solveIslandRange(manifolds, constraints, 0, len(s.islands))
 		return
 	}
 	runSolverJobs(threads, workers, len(s.islands), func(start, end, _ int) {
-		s.solveIslandRange(manifolds, start, end)
+		s.solveIslandRange(manifolds, constraints, start, end)
 	})
 }
 
@@ -139,7 +147,7 @@ func (s *CollisionSolver) ensureInitialized() {
 	}
 }
 
-func (s *CollisionSolver) buildIslands(manifolds []ContactManifold) {
+func (s *CollisionSolver) buildIslands(manifolds []ContactManifold, constraints []*Constraint) {
 	for key := range s.bodyIndex {
 		delete(s.bodyIndex, key)
 	}
@@ -148,12 +156,14 @@ func (s *CollisionSolver) buildIslands(manifolds []ContactManifold) {
 	}
 	for i := range s.islands {
 		s.islands[i].manifolds = s.islands[i].manifolds[:0]
+		s.islands[i].constraints = s.islands[i].constraints[:0]
 	}
 	s.islands = s.islands[:0]
 	s.writableBodies = s.writableBodies[:0]
 	s.parents = s.parents[:0]
 	s.ranks = s.ranks[:0]
 	s.eligibleContacts = s.eligibleContacts[:0]
+	s.eligibleConstraints = s.eligibleConstraints[:0]
 
 	for i := range manifolds {
 		manifold := &manifolds[i]
@@ -166,6 +176,17 @@ func (s *CollisionSolver) buildIslands(manifolds []ContactManifold) {
 			s.union(aIndex, bIndex)
 		}
 		s.eligibleContacts = append(s.eligibleContacts, i)
+	}
+	for i, constraint := range constraints {
+		if !s.shouldSolveConstraint(constraint) {
+			continue
+		}
+		aIndex, aWritable := s.addWritableBody(constraint.BodyA)
+		bIndex, bWritable := s.addWritableBody(constraint.BodyB)
+		if aWritable && bWritable {
+			s.union(aIndex, bIndex)
+		}
+		s.eligibleConstraints = append(s.eligibleConstraints, i)
 	}
 
 	for _, manifoldIndex := range s.eligibleContacts {
@@ -182,12 +203,27 @@ func (s *CollisionSolver) buildIslands(manifolds []ContactManifold) {
 		}
 		s.islands[islandIndex].manifolds = append(s.islands[islandIndex].manifolds, manifoldIndex)
 	}
+	for _, constraintIndex := range s.eligibleConstraints {
+		constraint := constraints[constraintIndex]
+		root := s.constraintRoot(constraint)
+		if root < 0 {
+			continue
+		}
+		islandIndex, ok := s.rootToIsland[root]
+		if !ok {
+			islandIndex = len(s.islands)
+			s.rootToIsland[root] = islandIndex
+			s.addIsland()
+		}
+		s.islands[islandIndex].constraints = append(s.islands[islandIndex].constraints, constraintIndex)
+	}
 }
 
 func (s *CollisionSolver) addIsland() {
 	if len(s.islands) < cap(s.islands) {
 		s.islands = s.islands[:len(s.islands)+1]
 		s.islands[len(s.islands)-1].manifolds = s.islands[len(s.islands)-1].manifolds[:0]
+		s.islands[len(s.islands)-1].constraints = s.islands[len(s.islands)-1].constraints[:0]
 		return
 	}
 	s.islands = append(s.islands, collisionIsland{})
@@ -201,6 +237,22 @@ func (s *CollisionSolver) shouldResolve(manifold *ContactManifold) bool {
 		return false
 	}
 	return manifold.BodyA.inverseMass()+manifold.BodyB.inverseMass() > 0
+}
+
+func (s *CollisionSolver) shouldSolveConstraint(constraint *Constraint) bool {
+	if constraint == nil || !constraint.Active || !constraint.Enabled {
+		return false
+	}
+	if constraint.BodyA == nil && constraint.BodyB == nil {
+		return false
+	}
+	if constraint.BodyA != nil && !constraint.BodyA.Active {
+		return false
+	}
+	if constraint.BodyB != nil && !constraint.BodyB.Active {
+		return false
+	}
+	return constraint.BodyA.inverseMass()+constraint.BodyB.inverseMass() > 0
 }
 
 func (s *CollisionSolver) addWritableBody(body *RigidBody) (int, bool) {
@@ -223,6 +275,16 @@ func (s *CollisionSolver) manifoldRoot(manifold *ContactManifold) int {
 		return s.find(index)
 	}
 	if index, ok := s.bodyIndex[manifold.BodyB]; ok {
+		return s.find(index)
+	}
+	return -1
+}
+
+func (s *CollisionSolver) constraintRoot(constraint *Constraint) int {
+	if index, ok := s.bodyIndex[constraint.BodyA]; ok {
+		return s.find(index)
+	}
+	if index, ok := s.bodyIndex[constraint.BodyB]; ok {
 		return s.find(index)
 	}
 	return -1
@@ -252,12 +314,15 @@ func (s *CollisionSolver) union(a, b int) {
 	}
 }
 
-func (s *CollisionSolver) solveIslandRange(manifolds []ContactManifold, start, end int) {
+func (s *CollisionSolver) solveIslandRange(manifolds []ContactManifold, constraints []*Constraint, start, end int) {
 	for islandIndex := start; islandIndex < end; islandIndex++ {
 		island := &s.islands[islandIndex]
 		for range s.VelocityIterations {
 			for _, manifoldIndex := range island.manifolds {
 				s.solveVelocity(&manifolds[manifoldIndex])
+			}
+			for _, constraintIndex := range island.constraints {
+				s.solveConstraint(constraints[constraintIndex])
 			}
 		}
 		for range s.PositionIterations {
@@ -265,6 +330,15 @@ func (s *CollisionSolver) solveIslandRange(manifolds []ContactManifold, start, e
 				s.solvePosition(&manifolds[manifoldIndex])
 			}
 		}
+	}
+}
+
+func (s *CollisionSolver) solveConstraint(constraint *Constraint) {
+	if constraint == nil {
+		return
+	}
+	for i := range constraint.Rows {
+		constraint.Rows[i].Solve()
 	}
 }
 

@@ -52,6 +52,7 @@ type Constraint struct {
 	Type    ConstraintType
 	BodyA   *RigidBody
 	BodyB   *RigidBody
+	Rows    []ConstraintSolverRow
 	Active  bool
 	Enabled bool
 	poolId  pooling.PoolGroupId

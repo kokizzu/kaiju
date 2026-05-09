@@ -52,10 +52,11 @@ type System struct {
 	constraints pooling.PoolGroup[Constraint]
 	// This is a singular vector at the moment, I'll be making
 	// multiple gravitational sources in the future
-	gravity     matrix.Vec3
-	broadPhase  SweepPrune
-	narrowPhase NarrowPhase
-	solver      CollisionSolver
+	gravity           matrix.Vec3
+	broadPhase        SweepPrune
+	narrowPhase       NarrowPhase
+	solver            CollisionSolver
+	constraintScratch []*Constraint
 }
 
 func (s *System) Initialize() {
@@ -126,6 +127,7 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 	stageConstraint := s.NewConstraint(constraint.Type, constraint.BodyA, constraint.BodyB)
 	stageConstraint.Active = constraint.Active
 	stageConstraint.Enabled = constraint.Enabled
+	stageConstraint.Rows = append(stageConstraint.Rows, constraint.Rows...)
 	stageConstraint.disableIfBodiesInvalid()
 	return stageConstraint
 }
@@ -184,6 +186,7 @@ func (s *System) Clear() {
 	s.broadPhase.Rebuild(&s.bodies)
 	s.narrowPhase.Reset()
 	s.solver.Reset()
+	s.constraintScratch = s.constraintScratch[:0]
 }
 
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
@@ -210,7 +213,7 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
 	manifolds := s.narrowPhase.Collide(pairs, threads)
 	s.wakeContacts(manifolds)
-	s.solver.Solve(manifolds, threads)
+	s.solver.SolveWithConstraints(manifolds, s.activeConstraints(), threads)
 	s.updateSleepState(dt)
 }
 
@@ -218,6 +221,16 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 // The returned slice is owned by the System and is reused on the next Step.
 func (s *System) Contacts() []ContactManifold {
 	return s.narrowPhase.Manifolds()
+}
+
+func (s *System) activeConstraints() []*Constraint {
+	s.constraintScratch = s.constraintScratch[:0]
+	s.constraints.Each(func(constraint *Constraint) {
+		if constraint != nil && constraint.Active && constraint.Enabled {
+			s.constraintScratch = append(s.constraintScratch, constraint)
+		}
+	})
+	return s.constraintScratch
 }
 
 func (s *System) canBroadPhaseCollide(a, b *RigidBody) bool {

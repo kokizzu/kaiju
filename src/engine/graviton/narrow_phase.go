@@ -561,6 +561,10 @@ func worldShape(body *RigidBody) Shape {
 		shape.Radius *= maxScale
 		shape.Height *= maxScale
 		shape.Direction = transformDirection(wm, shape.Direction)
+	case ShapeTypeMesh:
+		box := AABB(shape).Transform(wm)
+		shape.Center = box.Center
+		shape.Extent = box.Extent
 	}
 	return shape
 }
@@ -581,6 +585,8 @@ func shapeWorldAABB(shape Shape) AABB {
 	case ShapeTypeCylinder, ShapeTypeCone:
 		radius := matrix.Sqrt(shape.Radius*shape.Radius + shape.Height*shape.Height*0.25)
 		return NewAABB(shape.Center, matrix.NewVec3XYZ(radius))
+	case ShapeTypeMesh:
+		return NewAABB(shape.Center, shape.Extent)
 	default:
 		return NullAABB
 	}

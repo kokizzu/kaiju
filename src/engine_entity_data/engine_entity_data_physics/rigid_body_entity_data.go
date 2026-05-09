@@ -44,6 +44,7 @@ import (
 	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine_entity_data/content_id"
 	"kaijuengine.com/matrix"
+	"kaijuengine.com/rendering/loaders/kaiju_mesh"
 )
 
 var bindingKey = ""
@@ -82,16 +83,20 @@ type RigidBodyEntityData struct {
 
 func (r RigidBodyEntityData) Init(e *engine.Entity, host *engine.Host) {
 	host.StartPhysics()
-	body := r.gravitonRigidBody(e)
+	body := r.gravitonRigidBody(e, host)
 	host.Physics().AddEntity(e, body)
 }
 
-func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity) *graviton.RigidBody {
-	shape := r.gravitonShape(e.Transform.Scale())
+func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity, host *engine.Host) *graviton.RigidBody {
 	body := &graviton.RigidBody{}
 	body.Transform.SetupRawTransform()
 	body.Transform.SetPosition(e.Transform.Position())
 	body.Transform.SetRotation(e.Transform.Rotation())
+	if r.Shape == ShapeMesh {
+		body.SetStaticMesh(r.gravitonMesh(host))
+		return body
+	}
+	shape := r.gravitonShape(e.Transform.Scale())
 	// Scale is baked into the shape dimensions to match the existing behavior.
 	body.SetShape(shape)
 	if r.IsStatic {
@@ -101,6 +106,27 @@ func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity) *graviton.Rigid
 		body.SetDynamic(mass, graviton.CalculateLocalInertia(shape, mass))
 	}
 	return body
+}
+
+func (r RigidBodyEntityData) gravitonMesh(host *engine.Host) *graviton.MeshCollision {
+	if r.AssetKey == "" {
+		slog.Warn("graviton mesh physics shape has no asset key")
+		return graviton.NewMeshCollision(nil)
+	}
+	km, err := kaiju_mesh.ReadMesh(string(r.AssetKey), host)
+	if err != nil {
+		slog.Error("failed to read graviton mesh physics shape", "assetKey", r.AssetKey, "error", err)
+		return graviton.NewMeshCollision(nil)
+	}
+	positions := make([]matrix.Vec3, len(km.Verts))
+	for i := range km.Verts {
+		positions[i] = km.Verts[i].Position
+	}
+	mesh := graviton.NewMeshCollisionFromVertices(positions, km.Indexes)
+	if len(mesh.Triangles) == 0 {
+		slog.Warn("graviton mesh physics shape has no triangles", "assetKey", r.AssetKey)
+	}
+	return mesh
 }
 
 func (r RigidBodyEntityData) gravitonShape(scale matrix.Vec3) graviton.Shape {
@@ -125,7 +151,7 @@ func (r RigidBodyEntityData) gravitonShape(scale matrix.Vec3) graviton.Shape {
 		height := matrix.Float(r.Height) * scale.Y()
 		return graviton.NewConeShape(radius, height)
 	case ShapeMesh:
-		slog.Warn("graviton mesh physics shape is not implemented, falling back to box", "assetKey", r.AssetKey)
+		return graviton.NewMeshShape(graviton.NewAABB(matrix.Vec3Zero(), matrix.Vec3Zero()))
 	}
 	return graviton.NewBoxShape(r.Extent.Multiply(scale))
 }

@@ -28,7 +28,7 @@ func (s *System) Raycast(from, to matrix.Vec3) (Hit, bool) {
 		if _, ok := raycastAABB(ray, body.WorldAABB(), length); !ok {
 			return
 		}
-		hit, ok := raycastShape(ray, worldShape(body), length)
+		hit, ok := raycastBody(ray, body, length)
 		if !ok || hit.Distance >= closest.Distance {
 			return
 		}
@@ -40,6 +40,16 @@ func (s *System) Raycast(from, to matrix.Vec3) (Hit, bool) {
 		return Hit{}, false
 	}
 	return closest, true
+}
+
+func raycastBody(ray Ray, body *RigidBody, length matrix.Float) (Hit, bool) {
+	if body == nil {
+		return Hit{}, false
+	}
+	if body.Collision.Shape.Type == ShapeTypeMesh {
+		return body.Collision.Mesh.Raycast(ray, length, &body.Transform)
+	}
+	return raycastShape(ray, worldShape(body), length)
 }
 
 func (s *System) SphereSweep(from, to matrix.Vec3, radius matrix.Float) (Hit, bool) {

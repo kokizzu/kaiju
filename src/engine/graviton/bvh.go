@@ -117,7 +117,11 @@ func (b *BVH) RayIntersect(ray Ray, length float32) (any, matrix.Vec3, bool) {
 			if sub, ok := b.Item.Data.(*BVH); ok {
 				return sub.RayIntersect(ray, length)
 			}
-			return b.Item.Data, pt, true
+			data := b.Item.Data
+			if data == nil {
+				data = b.Item.HitCheck
+			}
+			return data, pt, true
 		}
 		return nil, matrix.Vec3{}, false
 	}

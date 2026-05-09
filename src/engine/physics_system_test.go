@@ -39,6 +39,57 @@ func TestStagePhysicsUpdateSyncsGravitonBodies(t *testing.T) {
 	}
 }
 
+func TestStagePhysicsLargeDeltaClampsToMaxSubSteps(t *testing.T) {
+	workGroup, threads, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.SetMaxSubSteps(2)
+	physics.Start()
+	defer physics.Destroy()
+
+	entity := NewEntity(workGroup)
+	body := newTestStageBody(entity, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entity, body)
+
+	physics.Update(workGroup, threads, 1.0)
+
+	posY := entity.Transform.Position().Y()
+	if posY >= 0 {
+		t.Fatalf("expected fixed substeps to advance the dynamic entity, got %v", entity.Transform.Position())
+	}
+	if posY < -0.05 {
+		t.Fatalf("expected large delta time to be clamped, got position %v", entity.Transform.Position())
+	}
+	if physics.accumulatedTime >= physics.FixedTimeStep() {
+		t.Fatalf("expected accumulator to be below one fixed step, got %f", physics.accumulatedTime)
+	}
+}
+
+func TestStagePhysicsAccumulatorWaitsForFixedStep(t *testing.T) {
+	workGroup, threads, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entity := NewEntity(workGroup)
+	body := newTestStageBody(entity, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entity, body)
+
+	halfStep := physics.FixedTimeStep() * 0.5
+	physics.Update(workGroup, threads, halfStep)
+	if !matrix.Vec3ApproxTo(entity.Transform.Position(), matrix.Vec3Zero(), 0.0001) {
+		t.Fatalf("expected half-step update to accumulate without stepping, got %v", entity.Transform.Position())
+	}
+
+	physics.Update(workGroup, threads, halfStep)
+	if entity.Transform.Position().Y() >= 0 {
+		t.Fatalf("expected accumulated fixed step to sync body back to entity, got %v", entity.Transform.Position())
+	}
+}
+
 func TestStagePhysicsAddEntityInitializesBodyFromEntityTransform(t *testing.T) {
 	workGroup, threads, cleanup := testStagePhysicsWorkers(t)
 	defer cleanup()
@@ -109,6 +160,7 @@ func TestStagePhysicsKinematicEntityDrivesBody(t *testing.T) {
 	defer cleanup()
 
 	physics := StagePhysics{}
+	physics.SetMaxSubSteps(1)
 	physics.Start()
 	defer physics.Destroy()
 

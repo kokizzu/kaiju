@@ -52,10 +52,20 @@ type StagePhysicsEntry struct {
 }
 
 type StagePhysics struct {
-	world    graviton.System
-	entities []StagePhysicsEntry
-	active   bool
+	world              graviton.System
+	entities           []StagePhysicsEntry
+	accumulatedTime    float64
+	fixedTimeStep      float64
+	maxAccumulatedTime float64
+	customMaxAccumTime bool
+	maxSubSteps        int
+	active             bool
 }
+
+const (
+	defaultPhysicsFixedTimeStep = 1.0 / 60.0
+	defaultPhysicsMaxSubSteps   = 5
+)
 
 func (pe *StagePhysicsEntry) syncEntityToBody() {
 	t := &pe.Entity.Transform
@@ -75,6 +85,51 @@ func (pe *StagePhysicsEntry) syncBodyToEntity() {
 
 func (p *StagePhysics) IsActive() bool          { return p.active }
 func (p *StagePhysics) World() *graviton.System { return &p.world }
+
+func (p *StagePhysics) FixedTimeStep() float64 {
+	p.ensureStepConfig()
+	return p.fixedTimeStep
+}
+
+func (p *StagePhysics) SetFixedTimeStep(step float64) {
+	if step <= 0 {
+		slog.Error("stage physics fixed time step must be greater than zero")
+		return
+	}
+	p.fixedTimeStep = step
+	p.ensureMaxAccumulatedTime()
+}
+
+func (p *StagePhysics) MaxSubSteps() int {
+	p.ensureStepConfig()
+	return p.maxSubSteps
+}
+
+func (p *StagePhysics) SetMaxSubSteps(maxSubSteps int) {
+	if maxSubSteps < 1 {
+		slog.Error("stage physics max substeps must be at least one")
+		return
+	}
+	p.maxSubSteps = maxSubSteps
+	p.ensureMaxAccumulatedTime()
+}
+
+func (p *StagePhysics) MaxAccumulatedTime() float64 {
+	p.ensureStepConfig()
+	return p.maxAccumulatedTime
+}
+
+func (p *StagePhysics) SetMaxAccumulatedTime(maxAccumulatedTime float64) {
+	if maxAccumulatedTime <= 0 {
+		slog.Error("stage physics max accumulated time must be greater than zero")
+		return
+	}
+	p.maxAccumulatedTime = maxAccumulatedTime
+	p.customMaxAccumTime = true
+	if p.accumulatedTime > p.maxAccumulatedTime {
+		p.accumulatedTime = p.maxAccumulatedTime
+	}
+}
 
 func (p *StagePhysics) FindHit(hit graviton.Hit) (*StagePhysicsEntry, bool) {
 	return p.FindBody(hit.Body)
@@ -98,6 +153,7 @@ func (p *StagePhysics) Start() {
 		slog.Error("Stage physics has already started, can not start again")
 		return
 	}
+	p.ensureStepConfig()
 	p.world.Initialize()
 	p.world.SetGravity(matrix.NewVec3(0, -9.81, 0))
 	p.active = true
@@ -109,6 +165,7 @@ func (p *StagePhysics) Destroy() {
 		p.world.Clear()
 	}
 	p.entities = klib.WipeSlice(p.entities)
+	p.accumulatedTime = 0
 	p.active = false
 }
 
@@ -168,16 +225,52 @@ func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape gravit
 
 func (p *StagePhysics) Update(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	defer tracing.NewRegion("StagePhysics.Update").End()
+	p.ensureStepConfig()
 	for i := range p.entities {
 		entry := &p.entities[i]
 		if entry.Body.IsKinematic() || (entry.Body.IsStatic() && entry.Entity.Transform.IsDirty()) {
 			entry.syncEntityToBody()
 		}
 	}
-	p.world.Step(workGroup, threads, deltaTime)
+	if deltaTime <= 0 {
+		p.world.Step(workGroup, threads, 0)
+	} else {
+		p.accumulatedTime += deltaTime
+		if p.accumulatedTime > p.maxAccumulatedTime {
+			p.accumulatedTime = p.maxAccumulatedTime
+		}
+		steps := 0
+		for p.accumulatedTime >= p.fixedTimeStep && steps < p.maxSubSteps {
+			p.world.Step(workGroup, threads, p.fixedTimeStep)
+			p.accumulatedTime -= p.fixedTimeStep
+			steps++
+		}
+	}
 	for i := range p.entities {
 		if p.entities[i].Body.IsDynamic() {
 			p.entities[i].syncBodyToEntity()
 		}
+	}
+}
+
+func (p *StagePhysics) ensureStepConfig() {
+	if p.fixedTimeStep <= 0 {
+		p.fixedTimeStep = defaultPhysicsFixedTimeStep
+	}
+	if p.maxSubSteps < 1 {
+		p.maxSubSteps = defaultPhysicsMaxSubSteps
+	}
+	p.ensureMaxAccumulatedTime()
+}
+
+func (p *StagePhysics) ensureMaxAccumulatedTime() {
+	if p.fixedTimeStep <= 0 || p.maxSubSteps < 1 {
+		return
+	}
+	if !p.customMaxAccumTime {
+		p.maxAccumulatedTime = p.fixedTimeStep * float64(p.maxSubSteps)
+	}
+	if p.accumulatedTime > p.maxAccumulatedTime {
+		p.accumulatedTime = p.maxAccumulatedTime
 	}
 }

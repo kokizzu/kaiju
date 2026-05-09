@@ -31,8 +31,10 @@ func (s *System) SetGravity(gravity matrix.Vec3) {
 
 func (s *System) NewBody() *RigidBody {
 	body, pool, id := s.bodies.Add()
+	*body = RigidBody{}
 	body.poolId = pool
 	body.id = id
+	body.Transform.SetupRawTransform()
 	return body
 }
 
@@ -48,22 +50,23 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 		body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
 		ms.Acceleration = matrix.Vec3{}
 	})
-	s.broadPhase.Rebuild(&s.bodies)
-	pairs := s.broadPhase.Sweep()
+	s.broadPhase.RebuildParallel(&s.bodies, threads)
+	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
 	for _, pair := range pairs {
-		a, b := pair.BodyA, pair.BodyB
-		if a == nil || b == nil {
-			continue
-		}
-		if a.IsStatic() && b.IsStatic() {
-			continue
-		}
-		if !s.canCollide(a, b) {
-			continue
-		}
+		_ = pair
 		// TODO: Narrow-phase collision detection
 		// TODO: Collision resolution
 	}
+}
+
+func (s *System) canBroadPhaseCollide(a, b *RigidBody) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	if a.IsStatic() && b.IsStatic() {
+		return false
+	}
+	return s.canCollide(a, b)
 }
 
 func (s *System) canCollide(a, b *RigidBody) bool {

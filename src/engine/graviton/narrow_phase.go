@@ -210,13 +210,9 @@ func collideSphereAny(a Sphere, b Shape) (Contact, bool) {
 		c, ok := collideSphereCapsule(a, Capsule(b))
 		return c, ok
 	case ShapeTypeCylinder:
-		if !a.IntersectsCylinder(Cylinder(b)) {
-			return Contact{}, false
-		}
+		return collideSphereCylinder(a, Cylinder(b))
 	case ShapeTypeCone:
-		if !a.IntersectsCone(Cone(b)) {
-			return Contact{}, false
-		}
+		return collideSphereCone(a, Cone(b))
 	default:
 		return Contact{}, false
 	}
@@ -236,13 +232,11 @@ func collideAABBAny(a AABB, b Shape) (Contact, bool) {
 		c, ok := collideCapsuleAABB(Capsule(b), a)
 		return flipContact(c), ok
 	case ShapeTypeCylinder:
-		if !Cylinder(b).IntersectsAABB(a) {
-			return Contact{}, false
-		}
+		c, ok := collideCylinderOOBB(Cylinder(b), OOBBFromAABB(a))
+		return flipContact(c), ok
 	case ShapeTypeCone:
-		if !Cone(b).IntersectsAABB(a) {
-			return Contact{}, false
-		}
+		c, ok := collideConeOOBB(Cone(b), OOBBFromAABB(a))
+		return flipContact(c), ok
 	default:
 		return Contact{}, false
 	}
@@ -263,13 +257,11 @@ func collideOOBBAny(a OOBB, b Shape) (Contact, bool) {
 		c, ok := collideCapsuleOOBB(Capsule(b), a)
 		return flipContact(c), ok
 	case ShapeTypeCylinder:
-		if !Cylinder(b).IntersectsOOBB(a) {
-			return Contact{}, false
-		}
+		c, ok := collideCylinderOOBB(Cylinder(b), a)
+		return flipContact(c), ok
 	case ShapeTypeCone:
-		if !Cone(b).IntersectsOOBB(a) {
-			return Contact{}, false
-		}
+		c, ok := collideConeOOBB(Cone(b), a)
+		return flipContact(c), ok
 	default:
 		return Contact{}, false
 	}
@@ -304,14 +296,12 @@ func collideCapsuleAny(a Capsule, b Shape) (Contact, bool) {
 func collideCylinderAny(a Cylinder, b Shape) (Contact, bool) {
 	switch b.Type {
 	case ShapeTypeSphere:
-		c, ok := collideSphereAny(Sphere(b), Shape(a))
+		c, ok := collideSphereCylinder(Sphere(b), a)
 		return flipContact(c), ok
 	case ShapeTypeAABB:
-		c, ok := collideAABBAny(AABB(b), Shape(a))
-		return flipContact(c), ok
+		return collideCylinderOOBB(a, OOBBFromAABB(AABB(b)))
 	case ShapeTypeOOBB:
-		c, ok := collideOOBBAny(OOBB(b), Shape(a))
-		return flipContact(c), ok
+		return collideCylinderOOBB(a, OOBB(b))
 	case ShapeTypeCapsule:
 		c, ok := collideCapsuleAny(Capsule(b), Shape(a))
 		return flipContact(c), ok
@@ -332,14 +322,12 @@ func collideCylinderAny(a Cylinder, b Shape) (Contact, bool) {
 func collideConeAny(a Cone, b Shape) (Contact, bool) {
 	switch b.Type {
 	case ShapeTypeSphere:
-		c, ok := collideSphereAny(Sphere(b), Shape(a))
+		c, ok := collideSphereCone(Sphere(b), a)
 		return flipContact(c), ok
 	case ShapeTypeAABB:
-		c, ok := collideAABBAny(AABB(b), Shape(a))
-		return flipContact(c), ok
+		return collideConeOOBB(a, OOBBFromAABB(AABB(b)))
 	case ShapeTypeOOBB:
-		c, ok := collideOOBBAny(OOBB(b), Shape(a))
-		return flipContact(c), ok
+		return collideConeOOBB(a, OOBB(b))
 	case ShapeTypeCapsule:
 		c, ok := collideCapsuleAny(Capsule(b), Shape(a))
 		return flipContact(c), ok
@@ -462,6 +450,169 @@ func collideSphereCapsule(s Sphere, c Capsule) (Contact, bool) {
 		Type:   ShapeTypeSphere,
 	}
 	return collideSphereSphere(s, virtual)
+}
+
+func collideSphereCylinder(s Sphere, c Cylinder) (Contact, bool) {
+	direction := safeNormal(c.Direction, matrix.Vec3Up())
+	halfHeight := c.Height * 0.5
+	diff := s.Center.Subtract(c.Center)
+	height := matrix.Vec3Dot(diff, direction)
+	radial := diff.Subtract(direction.Scale(height))
+	radialLength := radial.Length()
+	radialNormal := safeNormal(radial, direction.Orthogonal())
+	absHeight := matrix.Abs(height)
+	insideHeight := absHeight <= halfHeight
+	insideRadius := radialLength <= c.Radius
+	if insideHeight && insideRadius {
+		sideExit := c.Radius - radialLength
+		capExit := halfHeight - absHeight
+		normal := radialNormal
+		pointB := c.Center.Add(direction.Scale(height)).Add(radialNormal.Scale(c.Radius))
+		exitDistance := sideExit
+		if capExit <= sideExit {
+			sign := matrix.Float(1)
+			if height < 0 {
+				sign = -1
+			}
+			normal = direction.Scale(sign)
+			pointB = c.Center.Add(direction.Scale(sign * halfHeight)).Add(radial)
+			exitDistance = capExit
+		}
+		pointA := s.Center.Add(normal.Scale(s.Radius))
+		return newContact(pointA, pointB, normal, s.Radius+exitDistance), true
+	}
+	clampedHeight := klib.Clamp(height, -halfHeight, halfHeight)
+	clampedRadius := radialLength
+	if clampedRadius > c.Radius {
+		clampedRadius = c.Radius
+	}
+	closest := c.Center.Add(direction.Scale(clampedHeight)).Add(radialNormal.Scale(clampedRadius))
+	delta := closest.Subtract(s.Center)
+	distanceSq := delta.LengthSquared()
+	if distanceSq > s.Radius*s.Radius {
+		return Contact{}, false
+	}
+	distance := matrix.Float(0)
+	normal := fallbackNormal(s.Center, c.Center)
+	if distanceSq > contactEpsilon*contactEpsilon {
+		distance = matrix.Sqrt(distanceSq)
+		normal = delta.Scale(1 / distance)
+	}
+	pointA := s.Center.Add(normal.Scale(s.Radius))
+	return newContact(pointA, closest, normal, s.Radius-distance), true
+}
+
+func collideSphereCone(s Sphere, c Cone) (Contact, bool) {
+	closest, distance, inside := closestPointOnConeSurface(s.Center, c)
+	delta := closest.Subtract(s.Center)
+	distanceSq := delta.LengthSquared()
+	if !inside && distanceSq > s.Radius*s.Radius {
+		return Contact{}, false
+	}
+	normal := safeNormal(delta, fallbackNormal(s.Center, c.Center))
+	if !inside && distanceSq > contactEpsilon*contactEpsilon {
+		distance = matrix.Sqrt(distanceSq)
+	}
+	penetration := s.Radius - distance
+	if inside {
+		penetration = s.Radius + distance
+	}
+	pointA := s.Center.Add(normal.Scale(s.Radius))
+	return newContact(pointA, closest, normal, penetration), true
+}
+
+func collideCylinderOOBB(c Cylinder, b OOBB) (Contact, bool) {
+	direction := safeNormal(c.Direction, matrix.Vec3Up())
+	axes := [8]matrix.Vec3{}
+	axisCount := 0
+	addAxis := func(axis matrix.Vec3) {
+		if axis.LengthSquared() <= contactEpsilon*contactEpsilon {
+			return
+		}
+		axes[axisCount] = axis
+		axisCount++
+	}
+	addAxis(direction)
+	for i := 0; i < 3; i++ {
+		boxAxis := b.Orientation.ColumnVector(i)
+		addAxis(boxAxis)
+		addAxis(matrix.Vec3Cross(direction, boxAxis))
+	}
+	centerDelta := b.Center.Subtract(c.Center)
+	radialDelta := centerDelta.Subtract(direction.Scale(matrix.Vec3Dot(centerDelta, direction)))
+	addAxis(radialDelta)
+	normal := matrix.Vec3Right()
+	minOverlap := matrix.Inf(1)
+	for i := 0; i < axisCount; i++ {
+		axis := safeNormal(axes[i], matrix.Vec3Right())
+		cRadius := projectCylinderRadius(c, axis)
+		bRadius := projectOOBBRadius(b, axis)
+		centerDistance := matrix.Vec3Dot(centerDelta, axis)
+		overlap := cRadius + bRadius - matrix.Abs(centerDistance)
+		if overlap < 0 {
+			return Contact{}, false
+		}
+		if overlap < minOverlap {
+			minOverlap = overlap
+			if centerDistance < 0 {
+				axis = axis.Negative()
+			}
+			normal = axis
+		}
+	}
+	pointA := supportCylinder(c, normal)
+	pointB := supportOOBB(b, normal.Negative())
+	return newContact(pointA, pointB, normal, minOverlap), true
+}
+
+func collideConeOOBB(c Cone, b OOBB) (Contact, bool) {
+	direction := safeNormal(c.Direction, matrix.Vec3Up())
+	axes := [9]matrix.Vec3{}
+	axisCount := 0
+	addAxis := func(axis matrix.Vec3) {
+		if axis.LengthSquared() <= contactEpsilon*contactEpsilon {
+			return
+		}
+		axes[axisCount] = axis
+		axisCount++
+	}
+	addAxis(direction)
+	centerDelta := b.Center.Subtract(c.Center)
+	radialDelta := centerDelta.Subtract(direction.Scale(matrix.Vec3Dot(centerDelta, direction)))
+	if radialDelta.LengthSquared() > contactEpsilon*contactEpsilon {
+		sideAxis := radialDelta.Normal().Scale(c.Height).Subtract(direction.Scale(c.Radius))
+		addAxis(sideAxis)
+		addAxis(radialDelta)
+	}
+	for i := 0; i < 3; i++ {
+		boxAxis := b.Orientation.ColumnVector(i)
+		addAxis(boxAxis)
+		addAxis(matrix.Vec3Cross(direction, boxAxis))
+	}
+	normal := matrix.Vec3Right()
+	minOverlap := matrix.Inf(1)
+	for i := 0; i < axisCount; i++ {
+		axis := safeNormal(axes[i], matrix.Vec3Right())
+		coneMin, coneMax := projectCone(c, axis)
+		boxCenter := matrix.Vec3Dot(b.Center, axis)
+		boxRadius := projectOOBBRadius(b, axis)
+		boxMin := boxCenter - boxRadius
+		boxMax := boxCenter + boxRadius
+		overlap := matrix.Min(coneMax, boxMax) - matrix.Max(coneMin, boxMin)
+		if overlap < 0 {
+			return Contact{}, false
+		}
+		if overlap < minOverlap {
+			minOverlap = overlap
+			if matrix.Vec3Dot(centerDelta, axis) < 0 {
+				axis = axis.Negative()
+			}
+			normal = axis
+		}
+	}
+	pointA := supportCone(c, normal)
+	pointB := supportOOBB(b, normal.Negative())
+	return newContact(pointA, pointB, normal, minOverlap), true
 }
 
 func collideCapsuleMesh(c Capsule, mesh *MeshCollision, meshTransform *matrix.Transform) (Contact, bool) {
@@ -820,6 +971,36 @@ func supportOOBB(box OOBB, direction matrix.Vec3) matrix.Vec3 {
 	return point
 }
 
+func supportCylinder(c Cylinder, direction matrix.Vec3) matrix.Vec3 {
+	axis := safeNormal(c.Direction, matrix.Vec3Up())
+	point := c.Center
+	if matrix.Vec3Dot(direction, axis) >= 0 {
+		point = point.Add(axis.Scale(c.Height * 0.5))
+	} else {
+		point = point.Subtract(axis.Scale(c.Height * 0.5))
+	}
+	radial := direction.Subtract(axis.Scale(matrix.Vec3Dot(direction, axis)))
+	if radial.LengthSquared() > contactEpsilon*contactEpsilon {
+		point = point.Add(radial.Normal().Scale(c.Radius))
+	}
+	return point
+}
+
+func supportCone(c Cone, direction matrix.Vec3) matrix.Vec3 {
+	axis := safeNormal(c.Direction, matrix.Vec3Up())
+	halfHeight := c.Height * 0.5
+	apex := c.Center.Subtract(axis.Scale(halfHeight))
+	base := c.Center.Add(axis.Scale(halfHeight))
+	radial := direction.Subtract(axis.Scale(matrix.Vec3Dot(direction, axis)))
+	if radial.LengthSquared() > contactEpsilon*contactEpsilon {
+		base = base.Add(radial.Normal().Scale(c.Radius))
+	}
+	if matrix.Vec3Dot(base, direction) > matrix.Vec3Dot(apex, direction) {
+		return base
+	}
+	return apex
+}
+
 func supportAABB(box AABB, direction matrix.Vec3) matrix.Vec3 {
 	point := box.Center
 	for i := 0; i < 3; i++ {
@@ -830,6 +1011,52 @@ func supportAABB(box AABB, direction matrix.Vec3) matrix.Vec3 {
 		}
 	}
 	return point
+}
+
+func projectCylinderRadius(c Cylinder, axis matrix.Vec3) matrix.Float {
+	direction := safeNormal(c.Direction, matrix.Vec3Up())
+	axisDot := matrix.Vec3Dot(axis, direction)
+	radialSq := matrix.Max(1-axisDot*axisDot, 0)
+	return c.Height*0.5*matrix.Abs(axisDot) + c.Radius*matrix.Sqrt(radialSq)
+}
+
+func projectCone(c Cone, axis matrix.Vec3) (matrix.Float, matrix.Float) {
+	maxPoint := supportCone(c, axis)
+	minPoint := supportCone(c, axis.Negative())
+	minProjection := matrix.Vec3Dot(minPoint, axis)
+	maxProjection := matrix.Vec3Dot(maxPoint, axis)
+	if minProjection > maxProjection {
+		minProjection, maxProjection = maxProjection, minProjection
+	}
+	return minProjection, maxProjection
+}
+
+func closestPointOnConeSurface(point matrix.Vec3, c Cone) (matrix.Vec3, matrix.Float, bool) {
+	axis := safeNormal(c.Direction, matrix.Vec3Up())
+	height := matrix.Max(c.Height, contactEpsilon)
+	apex := c.Center.Subtract(axis.Scale(height * 0.5))
+	local := point.Subtract(apex)
+	axial := matrix.Vec3Dot(local, axis)
+	radial := local.Subtract(axis.Scale(axial))
+	radialLength := radial.Length()
+	radialNormal := safeNormal(radial, axis.Orthogonal())
+	sideT := klib.Clamp((axial*height+radialLength*c.Radius)/(height*height+c.Radius*c.Radius), 0, 1)
+	sideAxial := sideT * height
+	sideRadius := sideT * c.Radius
+	sidePoint := apex.Add(axis.Scale(sideAxial)).Add(radialNormal.Scale(sideRadius))
+	sideDistanceSq := (axial-sideAxial)*(axial-sideAxial) + (radialLength-sideRadius)*(radialLength-sideRadius)
+	baseAxial := height
+	baseRadius := klib.Clamp(radialLength, 0, c.Radius)
+	basePoint := apex.Add(axis.Scale(baseAxial)).Add(radialNormal.Scale(baseRadius))
+	baseDistanceSq := (axial-baseAxial)*(axial-baseAxial) + (radialLength-baseRadius)*(radialLength-baseRadius)
+	closest := sidePoint
+	distanceSq := sideDistanceSq
+	if baseDistanceSq < distanceSq {
+		closest = basePoint
+		distanceSq = baseDistanceSq
+	}
+	inside := pointInCone(point, c)
+	return closest, matrix.Sqrt(matrix.Max(distanceSq, 0)), inside
 }
 
 func closestPointOnTriangle(point, a, b, c matrix.Vec3) matrix.Vec3 {

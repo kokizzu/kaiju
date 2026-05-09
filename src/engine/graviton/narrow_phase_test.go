@@ -67,6 +67,76 @@ func TestNarrowPhaseCapsuleCapsuleContact(t *testing.T) {
 	}
 }
 
+func TestNarrowPhaseCylinderSphereContact(t *testing.T) {
+	cylinder := testRigidBody(NewCylinderShape(1, 2), matrix.Vec3Zero())
+	sphere := testRigidBody(NewSphereShape(1), matrix.Vec3{1.75, 0, 0})
+
+	manifold, ok := CollideBodies(cylinder, sphere)
+	if !ok {
+		t.Fatal("expected cylinder and sphere to collide")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Right(), 0.0001) {
+		t.Fatalf("expected +X cylinder-to-sphere normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.25) > 0.0001 {
+		t.Fatalf("expected penetration 0.25, got %f", contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseCylinderBoxContact(t *testing.T) {
+	cylinder := testRigidBody(NewCylinderShape(1, 2), matrix.Vec3Zero())
+	box := testRigidBody(NewBoxShape(matrix.Vec3One()), matrix.Vec3{1.75, 0, 0})
+
+	manifold, ok := CollideBodies(cylinder, box)
+	if !ok {
+		t.Fatal("expected cylinder and box to collide")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Right(), 0.0001) {
+		t.Fatalf("expected +X cylinder-to-box normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.25) > 0.0001 {
+		t.Fatalf("expected penetration 0.25, got %f", contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseConeSphereContact(t *testing.T) {
+	cone := testRigidBody(NewConeShape(1, 2), matrix.Vec3Zero())
+	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0.8, 0, 0})
+	expectedNormal := matrix.NewVec3(0.8944272, -0.4472136, 0)
+	expectedPenetration := matrix.Float(0.2316718)
+
+	manifold, ok := CollideBodies(cone, sphere)
+	if !ok {
+		t.Fatal("expected cone and sphere to collide")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, expectedNormal, 0.0001) {
+		t.Fatalf("expected cone side normal %v, got %v", expectedNormal, contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-expectedPenetration) > 0.0001 {
+		t.Fatalf("expected penetration %f, got %f", expectedPenetration, contact.Penetration)
+	}
+}
+
+func TestNarrowPhaseConeBoxContact(t *testing.T) {
+	cone := testRigidBody(NewConeShape(1, 2), matrix.Vec3Zero())
+	box := testRigidBody(NewBoxShape(matrix.Vec3One()), matrix.Vec3{0, 1.75, 0})
+
+	manifold, ok := CollideBodies(cone, box)
+	if !ok {
+		t.Fatal("expected cone and box to collide")
+	}
+	contact := manifold.Contacts[0]
+	if !matrix.Vec3ApproxTo(contact.Normal, matrix.Vec3Up(), 0.0001) {
+		t.Fatalf("expected +Y cone-to-box normal, got %v", contact.Normal)
+	}
+	if matrix.Abs(contact.Penetration-0.25) > 0.0001 {
+		t.Fatalf("expected penetration 0.25, got %f", contact.Penetration)
+	}
+}
+
 func TestNarrowPhaseSphereStaticMeshFloorContact(t *testing.T) {
 	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.45, 0})
 	mesh := testStaticMeshBody(testMeshFloor())

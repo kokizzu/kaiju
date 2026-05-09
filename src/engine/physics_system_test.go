@@ -256,6 +256,97 @@ func TestStagePhysicsFindHitReturnsEntityEntry(t *testing.T) {
 	}
 }
 
+func TestStagePhysicsAddsDistanceJointBetweenEntities(t *testing.T) {
+	workGroup, threads, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entityA := NewEntity(workGroup)
+	bodyA := newTestStageBody(entityA, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entityA, bodyA)
+
+	entityB := NewEntity(workGroup)
+	entityB.Transform.SetPosition(matrix.NewVec3(2, 0, 0))
+	bodyB := newTestStageBody(entityB, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entityB, bodyB)
+
+	joint := physics.AddDistanceJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero())
+	if joint == nil {
+		t.Fatal("expected distance joint to be created")
+	}
+
+	constraints := physics.World().Constraints()
+	if len(constraints) != 1 {
+		t.Fatalf("expected 1 staged constraint, got %d", len(constraints))
+	}
+	if constraints[0].Distance != joint {
+		t.Fatal("expected staged constraint to reference the returned distance joint")
+	}
+	if joint.BodyA != physics.entities[0].Body || joint.BodyB != physics.entities[1].Body {
+		t.Fatal("expected distance joint to use staged rigid bodies")
+	}
+	if len(physics.constraints) != 1 {
+		t.Fatalf("expected stage physics to track 1 constraint, got %d", len(physics.constraints))
+	}
+	if physics.constraints[0].Constraint != constraints[0] {
+		t.Fatal("expected stage physics to track the staged constraint")
+	}
+
+	physics.Update(workGroup, threads, 0)
+}
+
+func TestStagePhysicsRemovesConstraintsOnEntityDestroy(t *testing.T) {
+	workGroup, _, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entityA := NewEntity(workGroup)
+	bodyA := newTestStageBody(entityA, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entityA, bodyA)
+
+	entityB := NewEntity(workGroup)
+	entityB.Transform.SetPosition(matrix.NewVec3(2, 0, 0))
+	bodyB := newTestStageBody(entityB, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entityB, bodyB)
+
+	if physics.AddDistanceJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
+		t.Fatal("expected distance joint to be created")
+	}
+	if len(physics.World().Constraints()) != 1 {
+		t.Fatalf("expected 1 staged constraint before destroy, got %d", len(physics.World().Constraints()))
+	}
+
+	entityA.OnDestroy.Execute()
+
+	if len(physics.World().Constraints()) != 0 {
+		t.Fatalf("expected entity destroy to remove staged constraints, got %d", len(physics.World().Constraints()))
+	}
+	if len(physics.constraints) != 0 {
+		t.Fatalf("expected entity destroy to clear stage constraint tracking, got %d", len(physics.constraints))
+	}
+
+	entityC := NewEntity(workGroup)
+	entityC.Transform.SetPosition(matrix.NewVec3(4, 0, 0))
+	bodyC := newTestStageBody(entityC, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entityC, bodyC)
+
+	if physics.AddDistanceJoint(entityB, entityC, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
+		t.Fatal("expected second distance joint to be created")
+	}
+
+	entityC.OnDestroy.Execute()
+
+	if len(physics.World().Constraints()) != 0 {
+		t.Fatalf("expected second entity destroy to remove staged constraints, got %d", len(physics.World().Constraints()))
+	}
+}
+
 func newTestStageBody(entity *Entity, bodyType graviton.RigidBodyType) *graviton.RigidBody {
 	body := &graviton.RigidBody{}
 	body.Transform.SetupRawTransform()

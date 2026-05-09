@@ -51,9 +51,17 @@ type StagePhysicsEntry struct {
 	Body   *graviton.RigidBody
 }
 
+type stagePhysicsConstraintEntry struct {
+	EntityA    *Entity
+	EntityB    *Entity
+	Constraint *graviton.Constraint
+	remove     func()
+}
+
 type StagePhysics struct {
 	world              graviton.System
 	entities           []StagePhysicsEntry
+	constraints        []stagePhysicsConstraintEntry
 	accumulatedTime    float64
 	fixedTimeStep      float64
 	maxAccumulatedTime float64
@@ -147,6 +155,18 @@ func (p *StagePhysics) FindBody(body *graviton.RigidBody) (*StagePhysicsEntry, b
 	return nil, false
 }
 
+func (p *StagePhysics) FindEntity(entity *Entity) (*StagePhysicsEntry, bool) {
+	if entity == nil {
+		return nil, false
+	}
+	for i := range p.entities {
+		if p.entities[i].Entity == entity {
+			return &p.entities[i], true
+		}
+	}
+	return nil, false
+}
+
 func (p *StagePhysics) Start() {
 	defer tracing.NewRegion("StagePhysics.StagePhysics").End()
 	if p.active {
@@ -165,6 +185,7 @@ func (p *StagePhysics) Destroy() {
 		p.world.Clear()
 	}
 	p.entities = klib.WipeSlice(p.entities)
+	p.constraints = klib.WipeSlice(p.constraints)
 	p.accumulatedTime = 0
 	p.active = false
 }
@@ -204,6 +225,52 @@ func (p *StagePhysics) AddEntity(entity *Entity, body *graviton.RigidBody) {
 			p.world.RemoveBody(stageBody)
 		}
 	})
+}
+
+func (p *StagePhysics) AddConstraint(entityA, entityB *Entity, constraint *graviton.Constraint) *graviton.Constraint {
+	defer tracing.NewRegion("StagePhysics.AddConstraint").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add constraint")
+		return nil
+	}
+	if constraint == nil {
+		slog.Error("failed to add entity physics constraint, constraint is required")
+		return nil
+	}
+	bodyA, bodyB, ok := p.constraintBodies(entityA, entityB)
+	if !ok {
+		return nil
+	}
+	stageConstraint := p.world.AddConstraintWithBodies(constraint, bodyA, bodyB)
+	if stageConstraint == nil {
+		slog.Error("failed to add entity physics constraint")
+		return nil
+	}
+	p.trackConstraint(entityA, entityB, stageConstraint, func() {
+		p.world.RemoveConstraint(stageConstraint)
+	})
+	return stageConstraint
+}
+
+func (p *StagePhysics) AddDistanceJoint(entityA, entityB *Entity, localAnchorA, localAnchorB matrix.Vec3) *graviton.DistanceJoint {
+	defer tracing.NewRegion("StagePhysics.AddDistanceJoint").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add distance joint")
+		return nil
+	}
+	bodyA, bodyB, ok := p.constraintBodies(entityA, entityB)
+	if !ok {
+		return nil
+	}
+	joint := p.world.NewDistanceJoint(bodyA, bodyB, localAnchorA, localAnchorB)
+	if joint == nil {
+		slog.Error("failed to add entity physics distance joint")
+		return nil
+	}
+	p.trackConstraint(entityA, entityB, joint.Constraint(), func() {
+		p.world.RemoveDistanceJoint(joint)
+	})
+	return joint
 }
 
 func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape graviton.Shape) {
@@ -251,6 +318,71 @@ func (p *StagePhysics) Update(workGroup *concurrent.WorkGroup, threads *concurre
 			p.entities[i].syncBodyToEntity()
 		}
 	}
+}
+
+func (p *StagePhysics) constraintBodies(entityA, entityB *Entity) (*graviton.RigidBody, *graviton.RigidBody, bool) {
+	entryA, ok := p.FindEntity(entityA)
+	if !ok {
+		slog.Error("failed to add entity physics constraint, first entity has no staged body")
+		return nil, nil, false
+	}
+	entryB, ok := p.FindEntity(entityB)
+	if !ok {
+		slog.Error("failed to add entity physics constraint, second entity has no staged body")
+		return nil, nil, false
+	}
+	return entryA.Body, entryB.Body, true
+}
+
+func (p *StagePhysics) trackConstraint(entityA, entityB *Entity, constraint *graviton.Constraint, remove func()) {
+	idx := len(p.constraints)
+	p.constraints = append(p.constraints, stagePhysicsConstraintEntry{
+		EntityA:    entityA,
+		EntityB:    entityB,
+		Constraint: constraint,
+		remove:     remove,
+	})
+	removeConstraint := func() { p.removeConstraintByTrackedEntry(constraint, entityA, entityB, idx) }
+	entityA.OnDestroy.Add(removeConstraint)
+	entityB.OnDestroy.Add(removeConstraint)
+}
+
+func (p *StagePhysics) removeConstraintByTrackedEntry(
+	constraint *graviton.Constraint, entityA, entityB *Entity, expectedIdx int,
+) {
+	if expectedIdx >= 0 && expectedIdx < len(p.constraints) {
+		entry := &p.constraints[expectedIdx]
+		if entry.matches(constraint, entityA, entityB) {
+			p.removeConstraintAt(expectedIdx)
+			return
+		}
+	}
+	for i := range p.constraints {
+		if p.constraints[i].matches(constraint, entityA, entityB) {
+			p.removeConstraintAt(i)
+			return
+		}
+	}
+}
+
+func (p *StagePhysics) removeConstraintAt(idx int) {
+	entry := p.constraints[idx]
+	if entry.remove != nil {
+		entry.remove()
+	} else {
+		p.world.RemoveConstraint(entry.Constraint)
+	}
+	p.constraints = klib.RemoveUnordered(p.constraints, idx)
+}
+
+func (e *stagePhysicsConstraintEntry) matches(constraint *graviton.Constraint, entityA, entityB *Entity) bool {
+	if e == nil {
+		return false
+	}
+	if constraint != nil && e.Constraint == constraint {
+		return true
+	}
+	return e.EntityA == entityA && e.EntityB == entityB
 }
 
 func (p *StagePhysics) ensureStepConfig() {

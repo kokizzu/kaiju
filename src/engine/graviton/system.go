@@ -130,7 +130,14 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 		constraint.disableIfBodiesInvalid()
 		return constraint
 	}
-	stageConstraint := s.NewConstraint(constraint.Type, constraint.BodyA, constraint.BodyB)
+	return s.AddConstraintWithBodies(constraint, constraint.BodyA, constraint.BodyB)
+}
+
+func (s *System) AddConstraintWithBodies(constraint *Constraint, bodyA, bodyB *RigidBody) *Constraint {
+	if constraint == nil {
+		return nil
+	}
+	stageConstraint := s.NewConstraint(constraint.Type, bodyA, bodyB)
 	stageConstraint.Active = constraint.Active
 	stageConstraint.Enabled = constraint.Enabled
 	stageConstraint.BreakForce = constraint.BreakForce

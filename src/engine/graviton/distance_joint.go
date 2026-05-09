@@ -142,6 +142,13 @@ func (j *DistanceJoint) SetRestLength(restLength matrix.Float) {
 	WakeConstrainedBodies(j.BodyA, j.BodyB)
 }
 
+func (j *DistanceJoint) Constraint() *Constraint {
+	if j == nil {
+		return nil
+	}
+	return j.constraint
+}
+
 func (j *DistanceJoint) IsStretched() bool {
 	return j != nil && matrix.Abs(j.CurrentLength()-j.RestLength) > j.slop()
 }

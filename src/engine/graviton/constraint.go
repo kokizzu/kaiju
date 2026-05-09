@@ -36,7 +36,10 @@
 
 package graviton
 
-import "kaijuengine.com/engine/pooling"
+import (
+	"kaijuengine.com/engine/pooling"
+	"kaijuengine.com/matrix"
+)
 
 type ConstraintType uint8
 
@@ -63,10 +66,15 @@ type Constraint struct {
 	Hinge    *HingeJoint
 	Active   bool
 	Enabled  bool
-	poolId   pooling.PoolGroupId
-	id       pooling.PoolIndex
-	pooled   bool
-	awake    bool
+	// BreakForce and BreakTorque are optional impulse thresholds. Values <= 0
+	// leave that break mode disabled.
+	BreakForce  matrix.Float
+	BreakTorque matrix.Float
+	Broken      bool
+	poolId      pooling.PoolGroupId
+	id          pooling.PoolIndex
+	pooled      bool
+	awake       bool
 }
 
 func (c *Constraint) IsBodyBody() bool {
@@ -135,6 +143,83 @@ func (c *Constraint) SetEnabled(enabled bool) {
 	}
 	c.Enabled = enabled
 	c.syncAwakeState()
+}
+
+func (c *Constraint) SetBreakForce(threshold matrix.Float) {
+	if c == nil {
+		return
+	}
+	c.BreakForce = threshold
+}
+
+func (c *Constraint) SetBreakTorque(threshold matrix.Float) {
+	if c == nil {
+		return
+	}
+	c.BreakTorque = threshold
+}
+
+func (c *Constraint) BreakIfNeeded() bool {
+	if c == nil || c.Broken || (!c.hasBreakForce() && !c.hasBreakTorque()) {
+		return false
+	}
+	if c.hasBreakForce() && c.AccumulatedLinearImpulse() > c.BreakForce {
+		c.breakConstraint()
+		return true
+	}
+	if c.hasBreakTorque() && c.AccumulatedAngularImpulse() > c.BreakTorque {
+		c.breakConstraint()
+		return true
+	}
+	return false
+}
+
+func (c *Constraint) AccumulatedLinearImpulse() matrix.Float {
+	if c == nil {
+		return 0
+	}
+	if c.Distance != nil {
+		return matrix.Abs(c.Distance.AccumulatedImpulse)
+	}
+	if c.Rope != nil {
+		return matrix.Abs(c.Rope.AccumulatedImpulse)
+	}
+	if c.Point != nil {
+		return c.Point.AccumulatedImpulse.Length()
+	}
+	if c.Hinge != nil {
+		return c.Hinge.AccumulatedAnchorImpulse.Length()
+	}
+	var sum matrix.Float
+	for i := range c.Rows {
+		sum += c.Rows[i].AccumulatedImpulse * c.Rows[i].AccumulatedImpulse
+	}
+	return matrix.Sqrt(sum)
+}
+
+func (c *Constraint) AccumulatedAngularImpulse() matrix.Float {
+	if c == nil {
+		return 0
+	}
+	if c.Hinge != nil {
+		return c.Hinge.AccumulatedAngularImpulseMagnitude()
+	}
+	return 0
+}
+
+func (c *Constraint) breakConstraint() {
+	c.Broken = true
+	c.Enabled = false
+	c.Active = false
+	c.awake = false
+}
+
+func (c *Constraint) hasBreakForce() bool {
+	return c.BreakForce > 0
+}
+
+func (c *Constraint) hasBreakTorque() bool {
+	return c.BreakTorque > 0
 }
 
 func (c *Constraint) disableIfBodiesInvalid() {

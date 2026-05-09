@@ -153,9 +153,7 @@ func (j *PointJoint) solveVelocity() {
 	}
 	for i := range j.rows {
 		j.rows[i].Solve()
-		if j.WarmStarting {
-			j.AccumulatedImpulse[i] = j.rows[i].AccumulatedImpulse
-		}
+		j.AccumulatedImpulse[i] = j.rows[i].AccumulatedImpulse
 	}
 }
 

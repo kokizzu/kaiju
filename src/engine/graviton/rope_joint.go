@@ -170,9 +170,7 @@ func (j *RopeJoint) solveVelocity() {
 		return
 	}
 	j.row.Solve()
-	if j.WarmStarting {
-		j.AccumulatedImpulse = j.row.AccumulatedImpulse
-	}
+	j.AccumulatedImpulse = j.row.AccumulatedImpulse
 }
 
 func (j *RopeJoint) solvePosition() {

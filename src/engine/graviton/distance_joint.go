@@ -173,9 +173,7 @@ func (j *DistanceJoint) solveVelocity() {
 		return
 	}
 	j.row.Solve()
-	if j.WarmStarting {
-		j.AccumulatedImpulse = j.row.AccumulatedImpulse
-	}
+	j.AccumulatedImpulse = j.row.AccumulatedImpulse
 }
 
 func (j *DistanceJoint) solvePosition() {

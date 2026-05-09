@@ -133,6 +133,9 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 	stageConstraint := s.NewConstraint(constraint.Type, constraint.BodyA, constraint.BodyB)
 	stageConstraint.Active = constraint.Active
 	stageConstraint.Enabled = constraint.Enabled
+	stageConstraint.BreakForce = constraint.BreakForce
+	stageConstraint.BreakTorque = constraint.BreakTorque
+	stageConstraint.Broken = constraint.Broken
 	stageConstraint.Rows = append(stageConstraint.Rows, constraint.Rows...)
 	if constraint.Distance != nil {
 		distance := *constraint.Distance

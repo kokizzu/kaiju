@@ -163,6 +163,106 @@ func TestHingeJointRestrictsOffAxisRotation(t *testing.T) {
 	}
 }
 
+func TestHingeJointAngularLimits(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintVelocityIterations = 12
+	system.ConstraintPositionIterations = 12
+
+	body := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	joint := system.NewHingeJointToWorld(
+		body,
+		matrix.Vec3Zero(),
+		matrix.Vec3Zero(),
+		matrix.Vec3Up(),
+		matrix.Vec3Up(),
+	)
+	joint.SetAngularLimits(-matrix.Float(math.Pi/12), matrix.Float(math.Pi/12))
+	body.Transform.SetRotation(matrix.Vec3{0, 60, 0})
+	body.MotionState.AngularVelocity = matrix.Vec3Up().Scale(4)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	var observedLimitImpulse matrix.Float
+	for range 120 {
+		system.Step(workGroup, threads, 1.0/60.0)
+		observedLimitImpulse = matrix.Max(observedLimitImpulse, matrix.Abs(joint.AccumulatedLimitImpulse))
+	}
+
+	angle := joint.CurrentAngle()
+	if angle > joint.MaxAngle+0.03 {
+		t.Fatalf("expected hinge angle to stop at max %f, got %f", joint.MaxAngle, angle)
+	}
+	if angle < joint.MinAngle-0.03 {
+		t.Fatalf("expected hinge angle to stay above min %f, got %f", joint.MinAngle, angle)
+	}
+	if observedLimitImpulse <= 0 {
+		t.Fatalf("expected limit row to accumulate impulse")
+	}
+}
+
+func TestHingeJointMotorDrivesVelocity(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintVelocityIterations = 12
+	system.ConstraintPositionIterations = 0
+
+	body := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	joint := system.NewHingeJointToWorld(
+		body,
+		matrix.Vec3Zero(),
+		matrix.Vec3Zero(),
+		matrix.Vec3Up(),
+		matrix.Vec3Up(),
+	)
+	joint.SetMotor(3, 100)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 1.0/60.0)
+
+	speed := joint.CurrentAngularVelocity()
+	if matrix.Abs(speed-3) > 0.05 {
+		t.Fatalf("expected hinge motor to drive angular velocity near 3, got %f", speed)
+	}
+	if matrix.Abs(joint.AccumulatedMotorImpulse) <= 0 {
+		t.Fatalf("expected motor row to accumulate impulse")
+	}
+}
+
+func TestConstraintBreaksAboveImpulseThreshold(t *testing.T) {
+	system := System{}
+	system.Initialize()
+	system.SetGravity(matrix.Vec3Zero())
+	system.ConstraintVelocityIterations = 8
+	system.ConstraintPositionIterations = 0
+
+	body := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	body.MotionState.LinearVelocity = matrix.Vec3Right().Scale(20)
+	joint := system.NewPointJointToWorld(body, matrix.Vec3Zero(), matrix.Vec3Zero())
+	joint.constraint.SetBreakForce(0.1)
+
+	workGroup, threads, cleanup := testStepWorkers(t)
+	defer cleanup()
+
+	system.Step(workGroup, threads, 1.0/60.0)
+
+	if !joint.constraint.Broken {
+		t.Fatalf("expected constraint to be marked broken")
+	}
+	if joint.constraint.Enabled || joint.constraint.Active {
+		t.Fatalf("expected broken constraint to disable itself")
+	}
+	if joint.constraint.AccumulatedLinearImpulse() <= joint.constraint.BreakForce {
+		t.Fatalf("expected accumulated impulse to exceed break threshold, got %f <= %f",
+			joint.constraint.AccumulatedLinearImpulse(), joint.constraint.BreakForce)
+	}
+}
+
 func forbiddenAngularSpeed(angularVelocity, hingeAxis matrix.Vec3) matrix.Float {
 	axis := safeNormal(hingeAxis, matrix.Vec3Right())
 	allowed := axis.Scale(angularVelocity.Dot(axis))

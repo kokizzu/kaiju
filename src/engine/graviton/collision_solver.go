@@ -254,11 +254,11 @@ func (s *CollisionSolver) shouldSolveConstraint(constraint *Constraint) bool {
 	if constraint.BodyB != nil && !constraint.BodyB.Active {
 		return false
 	}
-	return constraint.BodyA.inverseMass()+constraint.BodyB.inverseMass() > 0
+	return solverBodyWritable(constraint.BodyA) || solverBodyWritable(constraint.BodyB)
 }
 
 func (s *CollisionSolver) addWritableBody(body *RigidBody) (int, bool) {
-	if body == nil || body.inverseMass() == 0 {
+	if !solverBodyWritable(body) {
 		return -1, false
 	}
 	if index, ok := s.bodyIndex[body]; ok {
@@ -270,6 +270,10 @@ func (s *CollisionSolver) addWritableBody(body *RigidBody) (int, bool) {
 	s.parents = append(s.parents, index)
 	s.ranks = append(s.ranks, 0)
 	return index, true
+}
+
+func solverBodyWritable(body *RigidBody) bool {
+	return body != nil && (body.inverseMass() > 0 || !body.inverseInertia().IsZero())
 }
 
 func (s *CollisionSolver) manifoldRoot(manifold *ContactManifold) int {
@@ -363,32 +367,37 @@ func (s *CollisionSolver) prepareConstraint(constraint *Constraint) {
 }
 
 func (s *CollisionSolver) solveConstraint(constraint *Constraint) {
-	if constraint == nil {
+	if constraint == nil || !constraint.Active || !constraint.Enabled {
 		return
 	}
 	if constraint.Type == ConstraintTypeDistance && constraint.Distance != nil {
 		constraint.Distance.solveVelocity()
+		constraint.BreakIfNeeded()
 		return
 	}
 	if constraint.Type == ConstraintTypeRope && constraint.Rope != nil {
 		constraint.Rope.solveVelocity()
+		constraint.BreakIfNeeded()
 		return
 	}
 	if constraint.Type == ConstraintTypePoint && constraint.Point != nil {
 		constraint.Point.solveVelocity()
+		constraint.BreakIfNeeded()
 		return
 	}
 	if constraint.Type == ConstraintTypeHinge && constraint.Hinge != nil {
 		constraint.Hinge.solveVelocity()
+		constraint.BreakIfNeeded()
 		return
 	}
 	for i := range constraint.Rows {
 		constraint.Rows[i].Solve()
 	}
+	constraint.BreakIfNeeded()
 }
 
 func (s *CollisionSolver) solveConstraintPosition(constraint *Constraint) {
-	if constraint == nil {
+	if constraint == nil || !constraint.Active || !constraint.Enabled {
 		return
 	}
 	if constraint.Type == ConstraintTypeDistance && constraint.Distance != nil {

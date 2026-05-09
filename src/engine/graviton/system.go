@@ -42,6 +42,25 @@ func (s *System) NewBody() *RigidBody {
 	return body
 }
 
+func (s *System) AddBody(body *RigidBody) *RigidBody {
+	if body == nil {
+		return nil
+	}
+	if body.pooled {
+		return body
+	}
+	stageBody := s.NewBody()
+	stageBody.Transform.SetPosition(body.Transform.WorldPosition())
+	stageBody.Transform.SetRotation(body.Transform.WorldRotation())
+	stageBody.Transform.SetScale(body.Transform.WorldScale())
+	stageBody.MotionState = body.MotionState
+	stageBody.Mass = body.Mass
+	stageBody.Collision = body.Collision
+	stageBody.Simulation = body.Simulation
+	stageBody.Active = body.Active
+	return stageBody
+}
+
 func (s *System) RemoveBody(body *RigidBody) {
 	if body == nil || !body.pooled {
 		return

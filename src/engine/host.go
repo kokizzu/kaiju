@@ -384,7 +384,7 @@ func (host *Host) Update(deltaTime float64) {
 	host.Updater.Update(deltaTime)
 	if !build.Editor {
 		if host.physics.IsActive() {
-			host.physics.Update(&host.threads, deltaTime)
+			host.physics.Update(host.WorkGroup(), &host.threads, deltaTime)
 		}
 	}
 	host.LateUpdater.Update(deltaTime)

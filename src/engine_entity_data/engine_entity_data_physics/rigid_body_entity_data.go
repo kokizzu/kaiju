@@ -83,7 +83,7 @@ type RigidBodyEntityData struct {
 func (r RigidBodyEntityData) Init(e *engine.Entity, host *engine.Host) {
 	host.StartPhysics()
 	body := r.gravitonRigidBody(e)
-	host.Physics().AddEntityShape(e, float32(body.Mass.Mass), body.Shape())
+	host.Physics().AddEntity(e, body)
 }
 
 func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity) *graviton.RigidBody {

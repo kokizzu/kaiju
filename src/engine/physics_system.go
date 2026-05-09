@@ -38,10 +38,8 @@ package engine
 
 import (
 	"log/slog"
-	"sync"
 
 	"kaijuengine.com/engine/graviton"
-	"kaijuengine.com/engine/physics"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/concurrent"
@@ -50,12 +48,13 @@ import (
 
 type StagePhysicsEntry struct {
 	Entity *Entity
-	Body   *physics.RigidBody
+	Body   *graviton.RigidBody
 }
 
 type StagePhysics struct {
-	world    *physics.World
+	world    graviton.System
 	entities []StagePhysicsEntry
+	active   bool
 }
 
 func (pe *StagePhysicsEntry) updateTransform() {
@@ -65,53 +64,48 @@ func (pe *StagePhysicsEntry) updateTransform() {
 	t.SetRotation(b.Rotation().ToEuler())
 }
 
-func (p *StagePhysics) IsActive() bool        { return p.world != nil }
-func (p *StagePhysics) World() *physics.World { return p.world }
-
-func (p *StagePhysics) FindCollision(hit physics.CollisionHit) (*StagePhysicsEntry, bool) {
-	defer tracing.NewRegion("StagePhysics.FindCollision").End()
-	if !hit.IsValid() {
-		return nil, false
-	}
-	obj := hit.Object()
-	for i := range p.entities {
-		if p.entities[i].Body.IsCollisionObject(obj) {
-			return &p.entities[i], true
-		}
-	}
-	return nil, false
-}
+func (p *StagePhysics) IsActive() bool          { return p.active }
+func (p *StagePhysics) World() *graviton.System { return &p.world }
 
 func (p *StagePhysics) Start() {
 	defer tracing.NewRegion("StagePhysics.StagePhysics").End()
-	if p.world != nil {
+	if p.active {
 		slog.Error("Stage physics has already started, can not start again")
 		return
 	}
-	broadphase := physics.NewBroadphaseInterface()
-	collisionConfig := physics.NewDefaultCollisionConfiguration()
-	dispatcher := physics.NewCollisionDispatcher(collisionConfig)
-	solver := physics.NewSequentialImpulseConstraintSolver()
-	p.world = physics.NewDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig)
+	p.world.Initialize()
 	p.world.SetGravity(matrix.NewVec3(0, -9.81, 0))
+	p.active = true
 }
 
 func (p *StagePhysics) Destroy() {
 	defer tracing.NewRegion("StagePhysics.Destroy").End()
-	for i := range p.entities {
-		p.world.RemoveRigidBody(p.entities[i].Body)
+	if p.active {
+		p.world.Clear()
 	}
 	p.entities = klib.WipeSlice(p.entities)
-	p.world = nil
+	p.active = false
 }
 
-func (p *StagePhysics) AddEntity(entity *Entity, body *physics.RigidBody) {
+func (p *StagePhysics) AddEntity(entity *Entity, body *graviton.RigidBody) {
 	defer tracing.NewRegion("StagePhysics.AddEntity").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add entity")
+		return
+	}
+	if entity == nil || body == nil {
+		slog.Error("failed to add entity physics, entity and body are required")
+		return
+	}
+	stageBody := p.world.AddBody(body)
+	if stageBody == nil {
+		slog.Error("failed to add entity physics body")
+		return
+	}
 	p.entities = append(p.entities, StagePhysicsEntry{
 		Entity: entity,
-		Body:   body,
+		Body:   stageBody,
 	})
-	p.world.AddRigidBody(body)
 	entity.OnDestroy.Add(func() {
 		cIdx := -1
 		for i := range p.entities {
@@ -122,58 +116,35 @@ func (p *StagePhysics) AddEntity(entity *Entity, body *physics.RigidBody) {
 		}
 		if cIdx != -1 {
 			p.entities = klib.RemoveUnordered(p.entities, cIdx)
-			p.world.RemoveRigidBody(body)
+			p.world.RemoveBody(stageBody)
 		}
 	})
 }
 
 func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape graviton.Shape) {
 	defer tracing.NewRegion("StagePhysics.AddEntityShape").End()
-	collisionShape := bulletShapeFromGraviton(shape)
-	if collisionShape == nil {
-		slog.Error("failed to create a physics collision shape", "shapeType", shape.Type)
-		return
-	}
 	t := &entity.Transform
 	inertia := graviton.CalculateLocalInertia(shape, matrix.Float(mass))
-	motion := physics.NewDefaultMotionState(matrix.QuaternionFromEuler(t.Rotation()), t.Position())
-	body := physics.NewRigidBody(mass, motion, collisionShape, inertia)
+	body := &graviton.RigidBody{}
+	body.Transform.SetupRawTransform()
+	body.Transform.SetPosition(t.Position())
+	body.Transform.SetRotation(t.Rotation())
+	body.SetShape(shape)
+	if mass <= 0 {
+		body.SetStatic()
+	} else {
+		body.SetDynamic(matrix.Float(mass), inertia)
+	}
 	p.AddEntity(entity, body)
 }
 
-func (p *StagePhysics) Update(threads *concurrent.Threads, deltaTime float64) {
+func (p *StagePhysics) Update(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	defer tracing.NewRegion("StagePhysics.Update").End()
-	p.world.StepSimulation(float32(deltaTime))
-	wg := sync.WaitGroup{}
-	works := []func(threadId int){}
+	p.world.Step(workGroup, threads, deltaTime)
 	for i := range p.entities {
 		if p.entities[i].Body.IsStatic() {
 			continue
 		}
-		wg.Add(1)
-		works = append(works, func(threadId int) {
-			p.entities[i].updateTransform()
-			wg.Done()
-		})
-	}
-	threads.AddWork(works)
-	wg.Wait()
-}
-
-func bulletShapeFromGraviton(shape graviton.Shape) *physics.CollisionShape {
-	switch shape.Type {
-	case graviton.ShapeTypeAABB, graviton.ShapeTypeOOBB:
-		return &physics.NewBoxShape(shape.Extent).CollisionShape
-	case graviton.ShapeTypeSphere:
-		return &physics.NewSphereShape(float32(shape.Radius)).CollisionShape
-	case graviton.ShapeTypeCapsule:
-		return &physics.NewCapsuleShape(float32(shape.Radius), float32(shape.Height)).CollisionShape
-	case graviton.ShapeTypeCylinder:
-		halfExtents := matrix.NewVec3(shape.Radius, shape.Height*0.5, shape.Radius)
-		return &physics.NewCylinderShape(halfExtents).CollisionShape
-	case graviton.ShapeTypeCone:
-		return &physics.NewConeShape(float32(shape.Radius), float32(shape.Height)).CollisionShape
-	default:
-		return nil
+		p.entities[i].updateTransform()
 	}
 }

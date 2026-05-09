@@ -141,6 +141,13 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 		distance.constraint = stageConstraint
 		stageConstraint.Distance = &distance
 	}
+	if constraint.Rope != nil {
+		rope := *constraint.Rope
+		rope.BodyA = stageConstraint.BodyA
+		rope.BodyB = stageConstraint.BodyB
+		rope.constraint = stageConstraint
+		stageConstraint.Rope = &rope
+	}
 	stageConstraint.disableIfBodiesInvalid()
 	return stageConstraint
 }
@@ -184,6 +191,51 @@ func (s *System) AddDistanceJoint(joint *DistanceJoint) *DistanceJoint {
 }
 
 func (s *System) RemoveDistanceJoint(joint *DistanceJoint) {
+	if joint == nil {
+		return
+	}
+	s.RemoveConstraint(joint.constraint)
+}
+
+func (s *System) NewRopeJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB matrix.Vec3) *RopeJoint {
+	constraint := s.NewConstraint(ConstraintTypeRope, bodyA, bodyB)
+	joint := NewRopeJoint(bodyA, bodyB, localAnchorA, localAnchorB)
+	joint.constraint = constraint
+	constraint.Rope = joint
+	return joint
+}
+
+func (s *System) NewRopeJointAtWorldAnchors(bodyA, bodyB *RigidBody, worldAnchorA, worldAnchorB matrix.Vec3) *RopeJoint {
+	return s.NewRopeJoint(
+		bodyA,
+		bodyB,
+		LocalAnchor(bodyA, worldAnchorA),
+		LocalAnchor(bodyB, worldAnchorB),
+	)
+}
+
+func (s *System) NewRopeJointToWorld(body *RigidBody, localAnchor, worldAnchor matrix.Vec3) *RopeJoint {
+	return s.NewRopeJoint(body, nil, localAnchor, worldAnchor)
+}
+
+func (s *System) AddRopeJoint(joint *RopeJoint) *RopeJoint {
+	if joint == nil {
+		return nil
+	}
+	if joint.constraint != nil && joint.constraint.pooled {
+		joint.constraint.disableIfBodiesInvalid()
+		return joint
+	}
+	constraint := s.NewConstraint(ConstraintTypeRope, joint.BodyA, joint.BodyB)
+	stageJoint := *joint
+	stageJoint.BodyA = constraint.BodyA
+	stageJoint.BodyB = constraint.BodyB
+	stageJoint.constraint = constraint
+	constraint.Rope = &stageJoint
+	return &stageJoint
+}
+
+func (s *System) RemoveRopeJoint(joint *RopeJoint) {
 	if joint == nil {
 		return
 	}

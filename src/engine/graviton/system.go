@@ -94,6 +94,7 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 		ms := &body.MotionState
 		ms.Acceleration.AddAssign(s.gravity)
 		ms.LinearVelocity.AddAssign(ms.Acceleration.Scale(dt))
+		ms.AngularVelocity.AddAssign(ms.AngularAcceleration.Scale(dt))
 		if !body.Simulation.IsFixedPosition {
 			body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
 		}
@@ -101,6 +102,7 @@ func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threa
 			body.Transform.AddRotation(ms.AngularVelocity.Scale(dt))
 		}
 		ms.Acceleration = matrix.Vec3{}
+		ms.AngularAcceleration = matrix.Vec3{}
 	})
 	s.broadPhase.RebuildParallel(&s.bodies, threads)
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)

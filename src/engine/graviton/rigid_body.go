@@ -31,9 +31,10 @@ type RigidBody struct {
 }
 
 type MotionState struct {
-	Acceleration    matrix.Vec3
-	LinearVelocity  matrix.Vec3
-	AngularVelocity matrix.Vec3
+	Acceleration        matrix.Vec3
+	AngularAcceleration matrix.Vec3
+	LinearVelocity      matrix.Vec3
+	AngularVelocity     matrix.Vec3
 }
 
 type Mass struct {
@@ -134,6 +135,60 @@ func (r *RigidBody) Position() matrix.Vec3 {
 
 func (r *RigidBody) Rotation() matrix.Quaternion {
 	return matrix.QuaternionFromEuler(r.Transform.WorldRotation())
+}
+
+// ApplyForce applies a continuous world-space force at the body's center of mass.
+func (r *RigidBody) ApplyForce(force matrix.Vec3) {
+	r.applyForce(force, matrix.Vec3Zero())
+}
+
+// ApplyForceAtPoint applies a continuous world-space force at a world-space point.
+func (r *RigidBody) ApplyForceAtPoint(force, point matrix.Vec3) {
+	if r == nil {
+		return
+	}
+	r.applyForce(force, point.Subtract(r.Transform.WorldPosition()))
+}
+
+// ApplyImpulse applies an immediate world-space impulse at the body's center of mass.
+func (r *RigidBody) ApplyImpulse(impulse matrix.Vec3) {
+	r.applyImpulse(impulse, matrix.Vec3Zero())
+}
+
+// ApplyImpulseAtPoint applies an immediate world-space impulse at a world-space point.
+func (r *RigidBody) ApplyImpulseAtPoint(impulse, point matrix.Vec3) {
+	if r == nil {
+		return
+	}
+	r.applyImpulse(impulse, point.Subtract(r.Transform.WorldPosition()))
+}
+
+func (r *RigidBody) applyForce(force, rOffset matrix.Vec3) {
+	invMass := r.inverseMass()
+	if invMass == 0 {
+		return
+	}
+	r.MotionState.Acceleration.AddAssign(force.Scale(invMass))
+	invInertia := r.inverseInertia()
+	if invInertia.IsZero() {
+		return
+	}
+	angularAcceleration := rOffset.Cross(force).Multiply(invInertia)
+	r.MotionState.AngularAcceleration.AddAssign(angularAcceleration)
+}
+
+func (r *RigidBody) applyImpulse(impulse, rOffset matrix.Vec3) {
+	invMass := r.inverseMass()
+	if invMass == 0 {
+		return
+	}
+	r.MotionState.LinearVelocity.AddAssign(impulse.Scale(invMass))
+	invInertia := r.inverseInertia()
+	if invInertia.IsZero() {
+		return
+	}
+	angularImpulse := rOffset.Cross(impulse).Multiply(invInertia)
+	r.MotionState.AngularVelocity.AddAssign(angularImpulse)
 }
 
 func (r *RigidBody) inverseMass() matrix.Float {

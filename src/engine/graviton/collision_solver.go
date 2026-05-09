@@ -336,17 +336,9 @@ func angularImpulseDenominator(body *RigidBody, r, axis matrix.Vec3) matrix.Floa
 }
 
 func applyImpulse(body *RigidBody, impulse, r matrix.Vec3) {
-	invMass := body.inverseMass()
-	if invMass == 0 {
-		return
+	if body != nil {
+		body.applyImpulse(impulse, r)
 	}
-	body.MotionState.LinearVelocity.AddAssign(impulse.Scale(invMass))
-	invInertia := body.inverseInertia()
-	if invInertia.IsZero() {
-		return
-	}
-	angularImpulse := r.Cross(impulse).Multiply(invInertia)
-	body.MotionState.AngularVelocity.AddAssign(angularImpulse)
 }
 
 func moveBody(body *RigidBody, correction matrix.Vec3) {

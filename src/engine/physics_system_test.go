@@ -138,6 +138,36 @@ func TestStagePhysicsKinematicEntityDrivesBody(t *testing.T) {
 	}
 }
 
+func TestStagePhysicsFindHitReturnsEntityEntry(t *testing.T) {
+	workGroup, threads, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entity := NewEntity(workGroup)
+	entity.Transform.SetPosition(matrix.NewVec3(2, 0, 0))
+	body := newTestStageBody(entity, graviton.RigidBodyTypeStatic)
+	physics.AddEntity(entity, body)
+	physics.Update(workGroup, threads, 0)
+
+	hit, ok := physics.World().Raycast(matrix.Vec3Zero(), matrix.NewVec3(10, 0, 0))
+	if !ok {
+		t.Fatal("expected raycast to hit stage body")
+	}
+	entry, ok := physics.FindHit(hit)
+	if !ok {
+		t.Fatal("expected hit body to resolve to stage physics entry")
+	}
+	if entry.Entity != entity {
+		t.Fatalf("expected hit to resolve entity %p, got %p", entity, entry.Entity)
+	}
+	if byBody, ok := physics.FindBody(hit.Body); !ok || byBody != entry {
+		t.Fatal("expected body lookup to resolve the same stage physics entry")
+	}
+}
+
 func newTestStageBody(entity *Entity, bodyType graviton.RigidBodyType) *graviton.RigidBody {
 	body := &graviton.RigidBody{}
 	body.Transform.SetupRawTransform()

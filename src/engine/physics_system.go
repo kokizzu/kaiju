@@ -76,6 +76,22 @@ func (pe *StagePhysicsEntry) syncBodyToEntity() {
 func (p *StagePhysics) IsActive() bool          { return p.active }
 func (p *StagePhysics) World() *graviton.System { return &p.world }
 
+func (p *StagePhysics) FindHit(hit graviton.Hit) (*StagePhysicsEntry, bool) {
+	return p.FindBody(hit.Body)
+}
+
+func (p *StagePhysics) FindBody(body *graviton.RigidBody) (*StagePhysicsEntry, bool) {
+	if body == nil {
+		return nil, false
+	}
+	for i := range p.entities {
+		if p.entities[i].Body == body {
+			return &p.entities[i], true
+		}
+	}
+	return nil, false
+}
+
 func (p *StagePhysics) Start() {
 	defer tracing.NewRegion("StagePhysics.StagePhysics").End()
 	if p.active {

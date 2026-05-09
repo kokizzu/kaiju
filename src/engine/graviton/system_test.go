@@ -69,6 +69,101 @@ func TestSystemRemoveBodyReleasesBody(t *testing.T) {
 	}
 }
 
+func TestSystemAddRemoveConstraint(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	constraint := system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+
+	if system.constraints.ElementCount() != 1 {
+		t.Fatalf("expected 1 pooled constraint, got %d", system.constraints.ElementCount())
+	}
+	if !constraint.IsValid() {
+		t.Fatal("expected new body-body constraint to be valid")
+	}
+	if !constraint.IsBodyBody() {
+		t.Fatal("expected two body endpoints to create a body-body constraint")
+	}
+
+	system.RemoveConstraint(constraint)
+
+	if system.constraints.ElementCount() != 0 {
+		t.Fatalf("expected removed constraint to release its pool slot, got %d constraints", system.constraints.ElementCount())
+	}
+	if constraint.Active || constraint.Enabled || constraint.pooled {
+		t.Fatal("expected removed constraint reference to be disabled and detached from the pool")
+	}
+
+	worldConstraint := system.NewConstraint(ConstraintTypeGeneric, bodyA, nil)
+	if !worldConstraint.IsValid() {
+		t.Fatal("expected body-world constraint to be valid")
+	}
+	if !worldConstraint.IsBodyWorld() {
+		t.Fatal("expected nil second endpoint to create a body-world constraint")
+	}
+}
+
+func TestSystemClearRemovesConstraints(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+	system.NewConstraint(ConstraintTypeGeneric, bodyA, nil)
+
+	system.ClearConstraints()
+
+	if system.constraints.ElementCount() != 0 {
+		t.Fatalf("expected clear constraints to release all constraints, got %d", system.constraints.ElementCount())
+	}
+	if system.bodies.ElementCount() != 2 {
+		t.Fatalf("expected clearing constraints not to affect bodies, got %d", system.bodies.ElementCount())
+	}
+
+	system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+	system.Clear()
+
+	if system.constraints.ElementCount() != 0 {
+		t.Fatalf("expected system clear to release all constraints, got %d", system.constraints.ElementCount())
+	}
+	if system.bodies.ElementCount() != 0 {
+		t.Fatalf("expected system clear to release all bodies, got %d", system.bodies.ElementCount())
+	}
+}
+
+func TestSystemRemoveBodyDisablesAttachedConstraints(t *testing.T) {
+	system := System{}
+	system.Initialize()
+
+	bodyA := addSystemSphere(&system, matrix.Vec3Zero(), RigidBodyTypeDynamic)
+	bodyB := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
+	bodyC := addSystemSphere(&system, matrix.Vec3{4, 0, 0}, RigidBodyTypeDynamic)
+	bodyBody := system.NewConstraint(ConstraintTypeGeneric, bodyA, bodyB)
+	bodyWorld := system.NewConstraint(ConstraintTypeGeneric, bodyA, nil)
+	unattached := system.NewConstraint(ConstraintTypeGeneric, bodyB, bodyC)
+
+	system.RemoveBody(bodyA)
+
+	if system.constraints.ElementCount() != 3 {
+		t.Fatalf("expected removing a body to leave constraints in storage, got %d", system.constraints.ElementCount())
+	}
+	if bodyBody.Active || bodyBody.Enabled || bodyBody.IsValid() {
+		t.Fatal("expected body-body constraint attached to removed body to be disabled")
+	}
+	if bodyWorld.Active || bodyWorld.Enabled || bodyWorld.IsValid() {
+		t.Fatal("expected body-world constraint attached to removed body to be disabled")
+	}
+	if bodyBody.BodyA != nil || bodyWorld.BodyA != nil {
+		t.Fatal("expected removed body endpoint to be cleared from attached constraints")
+	}
+	if !unattached.IsValid() {
+		t.Fatal("expected unrelated constraint to remain valid")
+	}
+}
+
 func TestSystemStepExcludesRemovedBodyFromContacts(t *testing.T) {
 	system := System{}
 	system.Initialize()

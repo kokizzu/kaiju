@@ -48,7 +48,8 @@ var (
 )
 
 type System struct {
-	bodies pooling.PoolGroup[RigidBody]
+	bodies      pooling.PoolGroup[RigidBody]
+	constraints pooling.PoolGroup[Constraint]
 	// This is a singular vector at the moment, I'll be making
 	// multiple gravitational sources in the future
 	gravity     matrix.Vec3
@@ -101,10 +102,69 @@ func (s *System) AddBody(body *RigidBody) *RigidBody {
 	return stageBody
 }
 
+func (s *System) NewConstraint(constraintType ConstraintType, bodyA, bodyB *RigidBody) *Constraint {
+	constraint, pool, id := s.constraints.Add()
+	*constraint = Constraint{}
+	constraint.Type = constraintType
+	constraint.poolId = pool
+	constraint.id = id
+	constraint.pooled = true
+	constraint.Active = true
+	constraint.Enabled = true
+	constraint.SetBodies(bodyA, bodyB)
+	return constraint
+}
+
+func (s *System) AddConstraint(constraint *Constraint) *Constraint {
+	if constraint == nil {
+		return nil
+	}
+	if constraint.pooled {
+		constraint.disableIfBodiesInvalid()
+		return constraint
+	}
+	stageConstraint := s.NewConstraint(constraint.Type, constraint.BodyA, constraint.BodyB)
+	stageConstraint.Active = constraint.Active
+	stageConstraint.Enabled = constraint.Enabled
+	stageConstraint.disableIfBodiesInvalid()
+	return stageConstraint
+}
+
+func (s *System) RemoveConstraint(constraint *Constraint) {
+	if constraint == nil || !constraint.pooled {
+		return
+	}
+	poolId := constraint.poolId
+	id := constraint.id
+	constraint.Active = false
+	constraint.Enabled = false
+	constraint.pooled = false
+	s.constraints.Remove(poolId, id)
+	*constraint = Constraint{}
+}
+
+func (s *System) ClearConstraints() {
+	s.constraints.Each(func(constraint *Constraint) {
+		constraint.Active = false
+		constraint.Enabled = false
+		constraint.pooled = false
+		*constraint = Constraint{}
+	})
+	s.constraints.Clear()
+}
+
+// RemoveBody releases a body and disables any constraints attached to it. The
+// disabled constraints remain in constraint storage until explicitly removed or
+// cleared, with the removed body endpoint set to nil.
 func (s *System) RemoveBody(body *RigidBody) {
 	if body == nil || !body.pooled {
 		return
 	}
+	s.constraints.Each(func(constraint *Constraint) {
+		if constraint.BodyA == body || constraint.BodyB == body {
+			constraint.detachBody(body)
+		}
+	})
 	poolId := body.poolId
 	id := body.id
 	body.Active = false
@@ -114,6 +174,7 @@ func (s *System) RemoveBody(body *RigidBody) {
 }
 
 func (s *System) Clear() {
+	s.ClearConstraints()
 	s.bodies.Each(func(body *RigidBody) {
 		body.Active = false
 		body.pooled = false

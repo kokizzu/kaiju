@@ -395,13 +395,20 @@ func (ed *Editor) saveNewStage(name string) {
 func (ed *Editor) openCodeEditor(path string) {
 	defer tracing.NewRegion("Editor.openCodeEditor").End()
 	// TODO:  If this is a file path, the space split won't be enough
-	fullArgs := strings.Split(ed.settings.CodeEditor, " ")
+	fullArgs := strings.Fields(ed.settings.CodeEditor)
+	if len(fullArgs) == 0 {
+		slog.Error("failed to launch code editor", "error", "code editor command is empty")
+		return
+	}
 	command := fullArgs[0]
 	var args []string
 	if len(fullArgs) > 1 {
 		args = append(args, fullArgs[1:]...)
 	}
 	args = append(args, path)
-	// goroutine
-	go exec.Command(command, args...).Run()
+	go func() {
+		if err := exec.Command(command, args...).Run(); err != nil {
+			slog.Error("failed to launch code editor", "command", command, "path", path, "error", err)
+		}
+	}()
 }

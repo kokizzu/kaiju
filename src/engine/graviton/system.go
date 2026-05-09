@@ -8,7 +8,7 @@ import (
 
 var (
 	// Common gravity `a` for Earth, used as default value
-	standardGravity float32 = -9.81
+	standardGravity matrix.Float = -9.81
 )
 
 type System struct {
@@ -18,12 +18,14 @@ type System struct {
 	gravity     matrix.Vec3
 	broadPhase  SweepPrune
 	narrowPhase NarrowPhase
+	solver      CollisionSolver
 }
 
 func (s *System) Initialize() {
 	// Take the ith unit vector and scale it proportionally to standard gravity
 	s.gravity = matrix.Vec3Up().Scale(standardGravity)
 	s.broadPhase.Initialize(1024)
+	s.solver.Initialize()
 }
 
 func (s *System) SetGravity(gravity matrix.Vec3) {
@@ -40,21 +42,28 @@ func (s *System) NewBody() *RigidBody {
 }
 
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
-	dt := float32(deltaTime)
+	dt := matrix.Float(deltaTime)
 	s.bodies.EachParallel("kaiju.phys", workGroup, threads, func(body *RigidBody) {
-		if !body.Active {
+		if !body.Active || body.Simulation.IsSleeping || body.Simulation.Type == RigidBodyTypeStatic {
 			return
 		}
 		ms := &body.MotionState
-		ms.Acceleration.AddAssign(s.gravity)
-		ms.LinearVelocity.AddAssign(ms.Acceleration.Scale(dt))
-		body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
+		if body.IsDynamic() {
+			ms.Acceleration.AddAssign(s.gravity)
+			ms.LinearVelocity.AddAssign(ms.Acceleration.Scale(dt))
+		}
+		if !body.Simulation.IsFixedPosition {
+			body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
+		}
+		if !body.Simulation.IsFixedRotation {
+			body.Transform.AddRotation(ms.AngularVelocity.Scale(dt))
+		}
 		ms.Acceleration = matrix.Vec3{}
 	})
 	s.broadPhase.RebuildParallel(&s.bodies, threads)
 	pairs := s.broadPhase.SweepParallel(threads, s.canBroadPhaseCollide)
-	s.narrowPhase.Collide(pairs, threads)
-	// TODO: Collision resolution
+	manifolds := s.narrowPhase.Collide(pairs, threads)
+	s.solver.Solve(manifolds, threads)
 }
 
 // Contacts returns the contact manifolds generated during the most recent Step.

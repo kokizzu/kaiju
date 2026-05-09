@@ -62,6 +62,28 @@ func (r *RigidBody) IsStatic() bool {
 	return r.Simulation.Type == RigidBodyTypeStatic || r.Mass.Mass == 0
 }
 
+func (r *RigidBody) IsDynamic() bool {
+	return r.Simulation.Type == RigidBodyTypeDynamic && r.Mass.inverseMass > 0
+}
+
+func (r *RigidBody) IsKinematic() bool {
+	return r.Simulation.Type == RigidBodyTypeKinematic
+}
+
+func (r *RigidBody) inverseMass() matrix.Float {
+	if r == nil || !r.IsDynamic() || r.Simulation.IsSleeping || r.Simulation.IsFixedPosition {
+		return 0
+	}
+	return r.Mass.inverseMass
+}
+
+func (r *RigidBody) inverseInertia() matrix.Vec3 {
+	if r == nil || !r.IsDynamic() || r.Simulation.IsSleeping || r.Simulation.IsFixedRotation {
+		return matrix.Vec3Zero()
+	}
+	return r.Mass.inverseInertia
+}
+
 func (r *RigidBody) SetMass(mass matrix.Float, inertia matrix.Vec3) {
 	r.Mass.Mass = mass
 	if mass > 0 {

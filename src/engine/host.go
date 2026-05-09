@@ -140,7 +140,7 @@ type Host struct {
 
 // NewHost creates a new host with the given name and log stream. The log stream
 // is the log handler that is used by the slog package functions. A Host that
-// is created through NewHost has no function until #Host.Initialize is called.
+// is created through NewHost has no function until [Host.Initialize] is called.
 //
 // This is primarily called from #host_container/New
 func NewHost(name string, logStream *logging.LogStream, assetDb assets.Database) *Host {

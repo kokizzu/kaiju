@@ -88,14 +88,12 @@ func (s *System) Clear() {
 func (s *System) Step(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	dt := matrix.Float(deltaTime)
 	s.bodies.EachParallel("kaiju.phys", workGroup, threads, func(body *RigidBody) {
-		if !body.Active || body.Simulation.IsSleeping || body.Simulation.Type == RigidBodyTypeStatic {
+		if !body.Active || body.Simulation.IsSleeping || !body.IsDynamic() {
 			return
 		}
 		ms := &body.MotionState
-		if body.IsDynamic() {
-			ms.Acceleration.AddAssign(s.gravity)
-			ms.LinearVelocity.AddAssign(ms.Acceleration.Scale(dt))
-		}
+		ms.Acceleration.AddAssign(s.gravity)
+		ms.LinearVelocity.AddAssign(ms.Acceleration.Scale(dt))
 		if !body.Simulation.IsFixedPosition {
 			body.Transform.AddPosition(ms.LinearVelocity.Scale(dt))
 		}

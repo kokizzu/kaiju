@@ -57,11 +57,20 @@ type StagePhysics struct {
 	active   bool
 }
 
-func (pe *StagePhysicsEntry) updateTransform() {
+func (pe *StagePhysicsEntry) syncEntityToBody() {
+	t := &pe.Entity.Transform
+	b := pe.Body
+	b.Transform.SetPosition(t.WorldPosition())
+	b.Transform.SetRotation(t.WorldRotation())
+	b.Transform.SetScale(t.WorldScale())
+}
+
+func (pe *StagePhysicsEntry) syncBodyToEntity() {
 	b := pe.Body
 	t := &pe.Entity.Transform
-	t.SetPosition(b.Position())
-	t.SetRotation(b.Rotation().ToEuler())
+	t.SetWorldPosition(b.Position())
+	t.SetWorldRotation(b.Rotation().ToEuler())
+	t.SetWorldScale(b.Transform.WorldScale())
 }
 
 func (p *StagePhysics) IsActive() bool          { return p.active }
@@ -97,6 +106,9 @@ func (p *StagePhysics) AddEntity(entity *Entity, body *graviton.RigidBody) {
 		slog.Error("failed to add entity physics, entity and body are required")
 		return
 	}
+	body.Transform.SetPosition(entity.Transform.WorldPosition())
+	body.Transform.SetRotation(entity.Transform.WorldRotation())
+	body.Transform.SetScale(entity.Transform.WorldScale())
 	stageBody := p.world.AddBody(body)
 	if stageBody == nil {
 		slog.Error("failed to add entity physics body")
@@ -140,11 +152,16 @@ func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape gravit
 
 func (p *StagePhysics) Update(workGroup *concurrent.WorkGroup, threads *concurrent.Threads, deltaTime float64) {
 	defer tracing.NewRegion("StagePhysics.Update").End()
+	for i := range p.entities {
+		entry := &p.entities[i]
+		if entry.Body.IsKinematic() || (entry.Body.IsStatic() && entry.Entity.Transform.IsDirty()) {
+			entry.syncEntityToBody()
+		}
+	}
 	p.world.Step(workGroup, threads, deltaTime)
 	for i := range p.entities {
-		if p.entities[i].Body.IsStatic() {
-			continue
+		if p.entities[i].Body.IsDynamic() {
+			p.entities[i].syncBodyToEntity()
 		}
-		p.entities[i].updateTransform()
 	}
 }

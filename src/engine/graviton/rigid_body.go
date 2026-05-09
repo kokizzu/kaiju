@@ -91,6 +91,9 @@ func (r *RigidBody) SetStatic() {
 	r.ensureDefaultCollisionFilter()
 }
 
+// SetKinematic makes this body entity-driven: the stage sync copies the entity
+// transform into the body before collision detection, and the solver treats it
+// as immovable because kinematic bodies have no inverse mass.
 func (r *RigidBody) SetKinematic() {
 	r.Active = true
 	r.Simulation.Type = RigidBodyTypeKinematic

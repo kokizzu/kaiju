@@ -110,6 +110,10 @@ func CreateArchiveFromFiles(reader FileReader, outPath string, files []SourceCon
 			var f *os.File
 			if f, err = os.Open(files[i].FullPath); err == nil {
 				_, err = buff.ReadFrom(f)
+				closeErr := f.Close()
+				if err == nil {
+					err = closeErr
+				}
 			}
 		}
 		if err != nil {

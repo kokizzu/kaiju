@@ -65,6 +65,21 @@ type ConstraintSolverRow struct {
 	MaxImpulse         matrix.Float
 }
 
+// AngularConstraintSolverRow stores a scalar angular-only Jacobian row. It is
+// used by constraints that must remove relative angular velocity around a
+// world-space axis without applying any linear impulse.
+type AngularConstraintSolverRow struct {
+	BodyA *RigidBody
+	BodyB *RigidBody
+
+	Axis               matrix.Vec3
+	EffectiveMass      matrix.Float
+	Bias               matrix.Float
+	AccumulatedImpulse matrix.Float
+	MinImpulse         matrix.Float
+	MaxImpulse         matrix.Float
+}
+
 func NewConstraintSolverRow(bodyA, bodyB *RigidBody, anchorA, anchorB, axis matrix.Vec3) ConstraintSolverRow {
 	row := ConstraintSolverRow{}
 	row.SetWorldAnchors(bodyA, bodyB, anchorA, anchorB, axis)
@@ -132,6 +147,54 @@ func (r *ConstraintSolverRow) impulseLimits() (matrix.Float, matrix.Float) {
 	return r.MinImpulse, r.MaxImpulse
 }
 
+func (r *AngularConstraintSolverRow) SetWorldAxis(bodyA, bodyB *RigidBody, axis matrix.Vec3) {
+	r.BodyA = bodyA
+	r.BodyB = bodyB
+	r.Axis = safeNormal(axis, matrix.Vec3Right())
+	r.EffectiveMass = AngularConstraintEffectiveMass(bodyA, bodyB, r.Axis)
+	r.MinImpulse = -matrix.Inf(1)
+	r.MaxImpulse = matrix.Inf(1)
+}
+
+func (r *AngularConstraintSolverRow) SetImpulseLimits(minimum, maximum matrix.Float) {
+	r.MinImpulse = minimum
+	r.MaxImpulse = maximum
+}
+
+func (r *AngularConstraintSolverRow) RelativeVelocity() matrix.Float {
+	return constraintBodyAngularVelocity(r.BodyA, r.Axis.Negative()) +
+		constraintBodyAngularVelocity(r.BodyB, r.Axis)
+}
+
+func (r *AngularConstraintSolverRow) ApplyImpulse(impulse matrix.Float) {
+	if impulse == 0 {
+		return
+	}
+	WakeConstrainedBodies(r.BodyA, r.BodyB)
+	applyAngularImpulse(r.BodyA, r.Axis.Scale(-impulse))
+	applyAngularImpulse(r.BodyB, r.Axis.Scale(impulse))
+}
+
+func (r *AngularConstraintSolverRow) Solve() matrix.Float {
+	if r.EffectiveMass <= 0 {
+		return 0
+	}
+	impulse := -(r.RelativeVelocity() + r.Bias) * r.EffectiveMass
+	previousImpulse := r.AccumulatedImpulse
+	minimum, maximum := r.impulseLimits()
+	r.AccumulatedImpulse = klib.Clamp(previousImpulse+impulse, minimum, maximum)
+	impulse = r.AccumulatedImpulse - previousImpulse
+	r.ApplyImpulse(impulse)
+	return impulse
+}
+
+func (r *AngularConstraintSolverRow) impulseLimits() (matrix.Float, matrix.Float) {
+	if r.MinImpulse == 0 && r.MaxImpulse == 0 {
+		return -matrix.Inf(1), matrix.Inf(1)
+	}
+	return r.MinImpulse, r.MaxImpulse
+}
+
 func WorldAnchor(body *RigidBody, localAnchor matrix.Vec3) matrix.Vec3 {
 	if body == nil {
 		return localAnchor
@@ -177,6 +240,28 @@ func ConstraintEffectiveMass(bodyA, bodyB *RigidBody, ra, rb, axis matrix.Vec3) 
 	return 1.0 / denominator
 }
 
+func AngularConstraintImpulseDenominator(bodyA, bodyB *RigidBody, axis matrix.Vec3) matrix.Float {
+	denominator := AngularAxisEffectiveMass(bodyA, axis)
+	denominator += AngularAxisEffectiveMass(bodyB, axis)
+	return denominator
+}
+
+func AngularConstraintEffectiveMass(bodyA, bodyB *RigidBody, axis matrix.Vec3) matrix.Float {
+	denominator := AngularConstraintImpulseDenominator(bodyA, bodyB, axis)
+	if denominator <= contactEpsilon {
+		return 0
+	}
+	return 1.0 / denominator
+}
+
+func AngularAxisEffectiveMass(body *RigidBody, axis matrix.Vec3) matrix.Float {
+	inverseInertia := body.inverseInertia()
+	if inverseInertia.IsZero() {
+		return 0
+	}
+	return axis.Multiply(inverseInertia).Dot(axis)
+}
+
 func WakeConstrainedBodies(bodyA, bodyB *RigidBody) {
 	wakeConstrainedBody(bodyA)
 	wakeConstrainedBody(bodyB)
@@ -194,4 +279,22 @@ func constraintBodyVelocity(body *RigidBody, linearAxis, angularAxis matrix.Vec3
 	}
 	return body.MotionState.LinearVelocity.Dot(linearAxis) +
 		body.MotionState.AngularVelocity.Dot(angularAxis)
+}
+
+func constraintBodyAngularVelocity(body *RigidBody, axis matrix.Vec3) matrix.Float {
+	if body == nil {
+		return 0
+	}
+	return body.MotionState.AngularVelocity.Dot(axis)
+}
+
+func applyAngularImpulse(body *RigidBody, impulse matrix.Vec3) {
+	if body == nil {
+		return
+	}
+	invInertia := body.inverseInertia()
+	if invInertia.IsZero() {
+		return
+	}
+	body.MotionState.AngularVelocity.AddAssign(impulse.Multiply(invInertia))
 }

@@ -155,6 +155,13 @@ func (s *System) AddConstraint(constraint *Constraint) *Constraint {
 		point.constraint = stageConstraint
 		stageConstraint.Point = &point
 	}
+	if constraint.Hinge != nil {
+		hinge := *constraint.Hinge
+		hinge.BodyA = stageConstraint.BodyA
+		hinge.BodyB = stageConstraint.BodyB
+		hinge.constraint = stageConstraint
+		stageConstraint.Hinge = &hinge
+	}
 	stageConstraint.disableIfBodiesInvalid()
 	return stageConstraint
 }
@@ -288,6 +295,53 @@ func (s *System) AddPointJoint(joint *PointJoint) *PointJoint {
 }
 
 func (s *System) RemovePointJoint(joint *PointJoint) {
+	if joint == nil {
+		return
+	}
+	s.RemoveConstraint(joint.constraint)
+}
+
+func (s *System) NewHingeJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB, localAxisA, localAxisB matrix.Vec3) *HingeJoint {
+	constraint := s.NewConstraint(ConstraintTypeHinge, bodyA, bodyB)
+	joint := NewHingeJoint(bodyA, bodyB, localAnchorA, localAnchorB, localAxisA, localAxisB)
+	joint.constraint = constraint
+	constraint.Hinge = joint
+	return joint
+}
+
+func (s *System) NewHingeJointAtWorldAnchor(bodyA, bodyB *RigidBody, worldAnchor, worldAxis matrix.Vec3) *HingeJoint {
+	return s.NewHingeJoint(
+		bodyA,
+		bodyB,
+		LocalAnchor(bodyA, worldAnchor),
+		LocalAnchor(bodyB, worldAnchor),
+		LocalAxis(bodyA, worldAxis),
+		LocalAxis(bodyB, worldAxis),
+	)
+}
+
+func (s *System) NewHingeJointToWorld(body *RigidBody, localAnchor, worldAnchor, localAxis, worldAxis matrix.Vec3) *HingeJoint {
+	return s.NewHingeJoint(body, nil, localAnchor, worldAnchor, localAxis, worldAxis)
+}
+
+func (s *System) AddHingeJoint(joint *HingeJoint) *HingeJoint {
+	if joint == nil {
+		return nil
+	}
+	if joint.constraint != nil && joint.constraint.pooled {
+		joint.constraint.disableIfBodiesInvalid()
+		return joint
+	}
+	constraint := s.NewConstraint(ConstraintTypeHinge, joint.BodyA, joint.BodyB)
+	stageJoint := *joint
+	stageJoint.BodyA = constraint.BodyA
+	stageJoint.BodyB = constraint.BodyB
+	stageJoint.constraint = constraint
+	constraint.Hinge = &stageJoint
+	return &stageJoint
+}
+
+func (s *System) RemoveHingeJoint(joint *HingeJoint) {
 	if joint == nil {
 		return
 	}

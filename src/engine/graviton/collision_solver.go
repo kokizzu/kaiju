@@ -355,6 +355,10 @@ func (s *CollisionSolver) prepareConstraint(constraint *Constraint) {
 	}
 	if constraint.Type == ConstraintTypePoint && constraint.Point != nil {
 		constraint.Point.prepare(s.DeltaTime)
+		return
+	}
+	if constraint.Type == ConstraintTypeHinge && constraint.Hinge != nil {
+		constraint.Hinge.prepare(s.DeltaTime)
 	}
 }
 
@@ -372,6 +376,10 @@ func (s *CollisionSolver) solveConstraint(constraint *Constraint) {
 	}
 	if constraint.Type == ConstraintTypePoint && constraint.Point != nil {
 		constraint.Point.solveVelocity()
+		return
+	}
+	if constraint.Type == ConstraintTypeHinge && constraint.Hinge != nil {
+		constraint.Hinge.solveVelocity()
 		return
 	}
 	for i := range constraint.Rows {
@@ -393,6 +401,10 @@ func (s *CollisionSolver) solveConstraintPosition(constraint *Constraint) {
 	}
 	if constraint.Type == ConstraintTypePoint && constraint.Point != nil {
 		constraint.Point.solvePosition()
+		return
+	}
+	if constraint.Type == ConstraintTypeHinge && constraint.Hinge != nil {
+		constraint.Hinge.solvePosition()
 	}
 }
 

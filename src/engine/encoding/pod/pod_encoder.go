@@ -171,6 +171,12 @@ func (e Encoder) encodeFields(val reflect.Value, typeLookup, fieldLookup []strin
 		}
 		fieldCount = uint8(count)
 		for i := range int(fieldCount) {
+			sf := t.Field(i)
+			// Skip unexported fields
+			if sf.PkgPath != "" {
+				fieldCount--
+				continue
+			}
 			f := val.Field(i)
 			switch f.Kind() {
 			case reflect.Pointer, reflect.Interface, reflect.Chan,
@@ -187,6 +193,11 @@ func (e Encoder) encodeFields(val reflect.Value, typeLookup, fieldLookup []strin
 			return err
 		}
 		for i := range count {
+			sf := t.Field(i)
+			// Skip unexported fields
+			if sf.PkgPath != "" {
+				continue
+			}
 			f := val.Field(i)
 			switch f.Kind() {
 			case reflect.Pointer, reflect.Interface, reflect.Chan,
@@ -199,9 +210,9 @@ func (e Encoder) encodeFields(val reflect.Value, typeLookup, fieldLookup []strin
 				}
 			}
 			// First, encode the field lookup id
-			fidx := slices.Index(fieldLookup, t.Field(i).Name)
+			fidx := slices.Index(fieldLookup, sf.Name)
 			if fidx < 0 {
-				return fmt.Errorf("field '%s' not found in field lookup", t.Field(i).Name)
+				return fmt.Errorf("field '%s' not found in field lookup", sf.Name)
 			}
 			if err := klib.BinaryWrite(e.w, uint16(fidx)); err != nil {
 				return err

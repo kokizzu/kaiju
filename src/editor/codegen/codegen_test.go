@@ -77,20 +77,22 @@ func TestWalk(t *testing.T) {
 	}
 	rt := gens[0].New()
 	rt.Value.Elem().FieldByName("Age").SetInt(10)
-	thing := []any{rt.Value}
+	thing := []any{rt.Value.Interface()}
 	s := bytes.NewBuffer([]byte{})
 	enc := pod.NewEncoder(s)
 	if err := enc.Encode(thing); err != nil {
 		t.Error(err)
 	}
-	rt.Value.Elem().FieldByName("Age").SetInt(15)
 	dec := pod.NewDecoder(s)
 	out := []any{}
 	if err := dec.Decode(&out); err != nil {
 		t.Error(err)
 	}
-	v := reflect.ValueOf(out[0])
-	a := v.Elem().FieldByName("Age").Int()
+	r := reflect.ValueOf(out[0])
+	if r.Kind() == reflect.Pointer {
+		r = r.Elem()
+	}
+	a := r.FieldByName("Age").Int()
 	if a != 10 {
 		t.Error("Expected 10, got ", a)
 	}

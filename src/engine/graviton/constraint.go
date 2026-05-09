@@ -45,6 +45,7 @@ const (
 	ConstraintTypeGeneric
 	ConstraintTypeDistance
 	ConstraintTypeRope
+	ConstraintTypePoint
 )
 
 // Constraint stores the lifecycle and endpoints for a future Graviton
@@ -57,6 +58,7 @@ type Constraint struct {
 	Rows     []ConstraintSolverRow
 	Distance *DistanceJoint
 	Rope     *RopeJoint
+	Point    *PointJoint
 	Active   bool
 	Enabled  bool
 	poolId   pooling.PoolGroupId
@@ -104,6 +106,10 @@ func (c *Constraint) SetBodies(bodyA, bodyB *RigidBody) {
 	if c.Rope != nil {
 		c.Rope.BodyA = bodyA
 		c.Rope.BodyB = bodyB
+	}
+	if c.Point != nil {
+		c.Point.BodyA = bodyA
+		c.Point.BodyB = bodyB
 	}
 	c.disableIfBodiesInvalid()
 	c.syncAwakeState()
@@ -154,7 +160,8 @@ func (c *Constraint) WakeBodies() {
 func (c *Constraint) IsStretched() bool {
 	return c != nil &&
 		((c.Distance != nil && c.Distance.IsStretched()) ||
-			(c.Rope != nil && c.Rope.IsStretched()))
+			(c.Rope != nil && c.Rope.IsStretched()) ||
+			(c.Point != nil && c.Point.IsStretched()))
 }
 
 func (c *Constraint) detachBody(body *RigidBody) {
@@ -174,6 +181,10 @@ func (c *Constraint) detachBody(body *RigidBody) {
 	if c.Rope != nil {
 		c.Rope.BodyA = c.BodyA
 		c.Rope.BodyB = c.BodyB
+	}
+	if c.Point != nil {
+		c.Point.BodyA = c.BodyA
+		c.Point.BodyB = c.BodyB
 	}
 	c.Active = false
 	c.Enabled = false

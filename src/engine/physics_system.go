@@ -135,7 +135,7 @@ func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape gravit
 		return
 	}
 	t := &entity.Transform
-	inertia := collisionShape.CalculateLocalInertia(mass)
+	inertia := graviton.CalculateLocalInertia(shape, matrix.Float(mass))
 	motion := physics.NewDefaultMotionState(matrix.QuaternionFromEuler(t.Rotation()), t.Position())
 	body := physics.NewRigidBody(mass, motion, collisionShape, inertia)
 	p.AddEntity(entity, body)

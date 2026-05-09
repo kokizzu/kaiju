@@ -13,6 +13,11 @@ const (
 	RigidBodyTypeDynamic
 )
 
+const (
+	DefaultCollisionGroup = 0
+	DefaultCollisionMask  = 1 << DefaultCollisionGroup
+)
+
 type RigidBody struct {
 	Transform   matrix.Transform
 	MotionState MotionState
@@ -71,6 +76,63 @@ func (r *RigidBody) IsKinematic() bool {
 	return r.Simulation.Type == RigidBodyTypeKinematic
 }
 
+func (r *RigidBody) SetDynamic(mass matrix.Float, inertia matrix.Vec3) {
+	r.Active = true
+	r.Simulation.Type = RigidBodyTypeDynamic
+	r.SetMass(mass, inertia)
+	r.ensureDefaultCollisionFilter()
+}
+
+func (r *RigidBody) SetStatic() {
+	r.Active = true
+	r.Simulation.Type = RigidBodyTypeStatic
+	r.SetMass(0, matrix.Vec3Zero())
+	r.MotionState = MotionState{}
+	r.ensureDefaultCollisionFilter()
+}
+
+func (r *RigidBody) SetKinematic() {
+	r.Active = true
+	r.Simulation.Type = RigidBodyTypeKinematic
+	r.SetMass(0, matrix.Vec3Zero())
+	r.ensureDefaultCollisionFilter()
+}
+
+func (r *RigidBody) SetShape(shape Shape) {
+	r.Collision.Shape = shape
+	r.Collision.LocalAABB = AABB{}
+	r.ensureDefaultCollisionFilter()
+}
+
+func (r *RigidBody) Shape() Shape {
+	return r.Collision.Shape
+}
+
+func (r *RigidBody) SetCollisionFilter(group, mask int) {
+	r.Collision.Group = group
+	r.Collision.Mask = mask
+}
+
+func (r *RigidBody) CollisionFilter() (int, int) {
+	return r.Collision.Group, r.Collision.Mask
+}
+
+func (r *RigidBody) SetTrigger(isTrigger bool) {
+	r.Collision.IsTrigger = isTrigger
+}
+
+func (r *RigidBody) IsTrigger() bool {
+	return r.Collision.IsTrigger
+}
+
+func (r *RigidBody) Position() matrix.Vec3 {
+	return r.Transform.WorldPosition()
+}
+
+func (r *RigidBody) Rotation() matrix.Quaternion {
+	return matrix.QuaternionFromEuler(r.Transform.WorldRotation())
+}
+
 func (r *RigidBody) inverseMass() matrix.Float {
 	if r == nil || !r.IsDynamic() || r.Simulation.IsSleeping || r.Simulation.IsFixedPosition {
 		return 0
@@ -98,6 +160,13 @@ func (r *RigidBody) SetMass(mass matrix.Float, inertia matrix.Vec3) {
 		if inertia[i] > 0 {
 			r.Mass.inverseInertia[i] = 1.0 / inertia[i]
 		}
+	}
+}
+
+func (r *RigidBody) ensureDefaultCollisionFilter() {
+	if r.Collision.Mask == 0 {
+		r.Collision.Group = DefaultCollisionGroup
+		r.Collision.Mask = DefaultCollisionMask
 	}
 }
 

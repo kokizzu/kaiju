@@ -132,3 +132,12 @@ func StringValueCompare(a, b string) int {
 	}
 	return strings.Compare(a, b)
 }
+
+func CleanNumString(v string) string {
+	v = strings.TrimSpace(v)
+	switch v {
+	case "", "-", "-.", ".":
+		return "0"
+	}
+	return v
+}

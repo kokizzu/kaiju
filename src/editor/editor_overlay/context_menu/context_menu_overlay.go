@@ -50,6 +50,23 @@ import (
 
 var existing *ContextMenu
 
+func IsOpen() bool {
+	return existing != nil
+}
+
+// IsPointInside returns true when a centered-screen UI point is inside the
+// currently open context menu bounds.
+func IsPointInside(centeredScreenPos matrix.Vec2) bool {
+	if existing == nil || existing.doc == nil {
+		return false
+	}
+	win, ok := existing.doc.GetElementById("window")
+	if !ok {
+		return false
+	}
+	return win.UI.Entity().Transform.ContainsPoint2D(centeredScreenPos)
+}
+
 type ContextMenu struct {
 	doc     *document.Document
 	uiMan   ui.Manager

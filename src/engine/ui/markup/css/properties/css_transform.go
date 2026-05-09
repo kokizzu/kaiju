@@ -76,6 +76,7 @@ func (p Transform) Process(panel *ui.Panel, elm *document.Element, values []rule
 	if len(values) != 1 {
 		return errors.New("transform expects 1 value")
 	}
+
 	switch values[0].Str {
 	case "none":
 	case "initial":
@@ -120,5 +121,6 @@ func (p Transform) Process(panel *ui.Panel, elm *document.Element, values []rule
 	default:
 		return errors.New("transform has unexpected value")
 	}
+
 	return nil
 }

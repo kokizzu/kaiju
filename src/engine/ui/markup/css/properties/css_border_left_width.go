@@ -49,10 +49,10 @@ import (
 func (p BorderLeftWidth) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	if len(values) != 1 {
 		return errors.New("BorderTopWidth requires exactly 1 value")
-	} else {
-		current := panel.Base().Layout().Border()
-		size := borderSizeFromStr(values[0].Str, host.Window, current.X())
-		panel.SetBorderSize(size, current.Y(), current.Z(), current.W())
-		return nil
 	}
+
+	current := panel.Base().Layout().Border()
+	size := borderSizeFromStr(values[0].Str, host.Window, current.X())
+	panel.SetBorderSize(size, current.Y(), current.Z(), current.W())
+	return nil
 }

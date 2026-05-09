@@ -52,7 +52,9 @@ func (p VerticalAlign) Process(panel *ui.Panel, elm *document.Element, values []
 	if len(values) != 1 {
 		return fmt.Errorf("expected exactly 1 value but got %d", len(values))
 	}
+
 	labels := childLabels(elm)
+
 	switch values[0].Str {
 	case "middle":
 		for _, l := range labels {
@@ -66,8 +68,9 @@ func (p VerticalAlign) Process(panel *ui.Panel, elm *document.Element, values []
 			layout.SetInnerOffsetTop(pp.Top()*0.5 - pb.Top()*0.5)
 			l.SetBaseline(rendering.FontBaselineCenter)
 		}
-		return nil
 	default:
 		return errors.New("VerticalAlign not implemented")
 	}
+
+	return nil
 }

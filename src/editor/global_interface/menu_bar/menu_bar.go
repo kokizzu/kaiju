@@ -37,10 +37,14 @@
 package menu_bar
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/png"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"kaijuengine.com/editor/editor_overlay/create_entity_data"
 	"kaijuengine.com/editor/editor_overlay/file_browser"
@@ -64,18 +68,26 @@ type MenuBar struct {
 	handler       MenuBarHandler
 }
 
+type menuBarTemplateData struct {
+	ShowGrid bool
+}
+
 func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 	defer tracing.NewRegion("MenuBar.Initialize").End()
 	b.handler = handler
 	b.uiMan.Init(host)
 	var err error
+	tplData := menuBarTemplateData{ShowGrid: handler.Settings().ShowGrid}
 	b.doc, err = markup.DocumentFromHTMLAsset(&b.uiMan, "editor/ui/global/menu_bar.go.html",
-		nil, map[string]func(*document.Element){
+		tplData, map[string]func(*document.Element){
 			"clickLogo":                b.openMenuTarget,
 			"clickFile":                b.openMenuTarget,
 			"clickEdit":                b.openMenuTarget,
 			"clickCreate":              b.openMenuTarget,
+			"clickView":                b.openMenuTarget,
 			"clickHelp":                b.openMenuTarget,
+			"clickToggleGrid":          b.clickToggleGrid,
+			"clickScreenshot":          b.clickScreenshot,
 			"clickStage":               b.clickStage,
 			"clickContent":             b.clickContent,
 			"clickShading":             b.clickShading,
@@ -101,6 +113,7 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"clickCreateTemplate":      b.clickCreateTemplate,
 			"clickCreateEntityData":    b.clickCreateEntityData,
 			"clickCreateHtmlUi":        b.clickCreateHtmlUi,
+			"clickCreateCssStylesheet": b.clickCreateCssStylesheet,
 			"clickNewCamera":           b.clickNewCamera,
 			"clickNewEntity":           b.clickNewEntity,
 			"clickNewLight":            b.clickNewLight,
@@ -116,6 +129,13 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"popupMiss":                b.popupMiss,
 		})
 	b.doc.Clean()
+	for _, m := range b.doc.GetElementsByClass("menuEntry") {
+		target := m.Attribute("data-target")
+		pop, _ := b.doc.GetElementById(target)
+		b.setPopupUiPos(m, pop)
+	}
+	b.doc.Clean()
+	b.hidePopups()
 	return err
 }
 
@@ -161,6 +181,14 @@ func (b *MenuBar) SetWorkspaceSettings() {
 	b.selectTab(t)
 }
 
+func (b *MenuBar) setPopupUiPos(e *document.Element, pop *document.Element) {
+	defer tracing.NewRegion("MenuBar.setPopupUiPos").End()
+	t := &e.UI.Entity().Transform
+	x := t.WorldPosition().X() + float32(b.uiMan.Host.Window.Width())*0.5 -
+		e.UI.Layout().PixelSize().X()*0.5
+	pop.UI.Layout().SetInnerOffsetLeft(x)
+}
+
 func (b *MenuBar) openMenuTarget(e *document.Element) {
 	defer tracing.NewRegion("MenuBar.openMenuTarget").End()
 	target := e.Attribute("data-target")
@@ -176,10 +204,7 @@ func (b *MenuBar) openMenuTarget(e *document.Element) {
 			}
 		}
 		pop.UI.Show()
-		t := &e.UI.Entity().Transform
-		x := t.WorldPosition().X() + float32(b.uiMan.Host.Window.Width())*0.5 -
-			e.UI.Layout().PixelSize().X()*0.5
-		pop.UI.Layout().SetInnerOffsetLeft(x)
+		b.setPopupUiPos(e, pop)
 		b.handler.BlurInterface()
 		b.uiMan.Host.RunOnMainThread(b.Focus)
 	}
@@ -296,6 +321,23 @@ func (b *MenuBar) clickCreateHtmlUi(*document.Element) {
 		OnConfirm: func(name string) {
 			b.handler.FocusInterface()
 			b.handler.CreateHtmlUiFile(name)
+		},
+	})
+}
+func (b *MenuBar) clickCreateCssStylesheet(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateCssStylesheet").End()
+	b.hidePopups()
+	b.handler.BlurInterface()
+	input_prompt.Show(b.uiMan.Host, input_prompt.Config{
+		Title:       "Name your CSS file",
+		Description: "Give a friendly name to your css file",
+		Placeholder: "Name...",
+		ConfirmText: "Create",
+		CancelText:  "Cancel",
+		OnCancel:    b.handler.FocusInterface,
+		OnConfirm: func(name string) {
+			b.handler.FocusInterface()
+			b.handler.CreateCssStylesheetFile(name)
 		},
 	})
 }
@@ -483,6 +525,54 @@ func (b *MenuBar) clickSponsors(*document.Element) {
 	b.hidePopups()
 	b.handler.BlurInterface()
 	sponsors.Show(b.uiMan.Host, b.handler.FocusInterface)
+}
+
+func (b *MenuBar) clickToggleGrid(e *document.Element) {
+	defer tracing.NewRegion("MenuBar.clickToggleGrid").End()
+	visible := !b.handler.Settings().ShowGrid
+	b.handler.SetGridVisible(visible)
+	if lbl := e.InnerLabel(); lbl != nil {
+		if visible {
+			lbl.SetText("Hide Grid")
+		} else {
+			lbl.SetText("Show Grid")
+		}
+	}
+	b.hidePopups()
+}
+
+func (b *MenuBar) clickScreenshot(e *document.Element) {
+	defer tracing.NewRegion("MenuBar.clickScreenshot").End()
+	b.hidePopups()
+	host := e.UI.Host()
+	host.RunNextFrame(func() {
+		device := host.Window.GpuHost.FirstInstance().PrimaryDevice()
+		pixels, err := device.Screenshot()
+		if err != nil {
+			slog.Error("Failed to capture the screenshot", "error", err)
+			return
+		}
+		if len(pixels) == 0 {
+			slog.Error("No pixels were returned for the frame")
+			return
+		}
+		size := device.LogicalDevice.SwapChain.Extent
+		img := image.NewRGBA(image.Rect(0, 0, int(size.X()), int(size.Y())))
+		copy(img.Pix, pixels)
+		var buf bytes.Buffer
+		if err = png.Encode(&buf, img); err != nil {
+			slog.Error("Failed to encode the png file", "error", err)
+			return
+		}
+		fs := b.handler.Project().FileSystem()
+		fs.Mkdir("screenshots", os.ModePerm)
+		path := fmt.Sprintf("screenshots/%s.png", time.Now().Format("2006-01-02-03-04-05"))
+		if err := fs.WriteFile(path, buf.Bytes(), os.ModePerm); err != nil {
+			slog.Error("Failed to write the screenshot file", "error", err)
+			return
+		}
+		slog.Info("Screenshot captured", "path", path)
+	})
 }
 
 func (b *MenuBar) popupMiss(e *document.Element) {

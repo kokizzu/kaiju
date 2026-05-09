@@ -48,6 +48,7 @@ func (p RowGap) Process(panel *ui.Panel, elm *document.Element, values []rules.P
 	if len(values) == 0 || values[0].Str == "initial" || values[0].Str == "inherit" {
 		return nil
 	}
+
 	gap := helpers.NumFromLength(values[0].Str, host.Window)
 	current := panel.GridGap()
 	panel.SetGridGap(current.X(), gap)

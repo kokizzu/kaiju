@@ -12,7 +12,7 @@
 				width: 50%;
 				left: 50%;
 				top: 50%;
-				transform: translate(-50% -50%);
+				transform: translate(-50%, -50%);
 				padding: 22px;
 				z-index: 20;
 			}
@@ -30,7 +30,10 @@
 				width: 20%;
 			}
 			span { height: 2em; vertical-align: middle; }
-			.openProject button { margin-left: 10px; }
+			.openProject button {
+				margin-left: 10px;
+				width: 100%;
+			}
 			.createBtn {
 				left: 50%;
 				margin-top: 0.5em;
@@ -43,11 +46,13 @@
 				background-color: #383838;
 				margin-bottom: 0.3em;
 				padding: 0.3em;
+				width: 100%;
 			}
 			.recentProjectEntry {
 				background-color: #282828;
 				color: #AAA;
 				margin-bottom: 0.2em;
+				width: 100%;
 			}
 			.recentProjectEntry:hover {
 				background-color: #585858;
@@ -60,9 +65,9 @@
 			<h1>Kaiju Engine</h1>
 			{{if .RecentProjects}}
 			<div class="recentProjects">
-				<h3>Recent projects</h3>
+				<h3>Recent Projects</h3>
 				{{range .RecentProjects}}
-				<div class="recentProjectEntry" data-path="{{.Path}}" onclick="openRecentProject">{{.Label}}</div>
+				<button class="recentProjectEntry" data-path="{{.Path}}" onclick="openRecentProject">{{.Label}}</button>
 				{{end}}
 			</div>
 			{{end}}
@@ -79,7 +84,7 @@
 			</div>
 			<div class="inputPanel">
 				<input id="folder" class="folderInput" type="text" placeholder="Folder..." />
-				<button onclick="browse">Browse...</button>
+				<button class="browseButton" onclick="browse">Browse...</button>
 			</div>
 			<div class="openProject">
 				<button onclick="selectTemplate">Select Template</button>

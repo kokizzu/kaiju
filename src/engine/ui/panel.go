@@ -116,14 +116,19 @@ type panelData struct {
 	drawing                   rendering.Drawing
 	transparentDrawing        rendering.Drawing
 	fitContent                ContentFit
-	isGrid                    bool
 	gridColumns               int
 	gridGap                   matrix.Vec2
-	requestScrollX            requestScroll
-	requestScrollY            requestScroll
-	overflow                  Overflow
-	enforcedColorStack        []matrix.Color
-	flags                     panelBits
+	// Positive values are fixed pixel widths, negative values are fr units.
+	gridTemplateColumns []float32
+	requestScrollX      requestScroll
+	requestScrollY      requestScroll
+	overflow            Overflow
+	enforcedColorStack  []matrix.Color
+	flags               panelBits
+	minSize             matrix.Vec2
+	maxSize             matrix.Vec2
+	aspectRatio         float32
+	usesBorderBox       bool
 }
 
 func (b panelBits) isScrolling() bool        { return b&panelBitsIsScrolling != 0 }
@@ -146,6 +151,10 @@ func (b *panelBits) resetAllowClickThrough() { *b &= ^panelBitsAllowClickThrough
 func (b *panelBits) resetWasDirtied()        { *b &= ^panelBitsWasDirtied }
 
 func (p *panelData) innerPanelData() *panelData { return p }
+func (p *panelData) HasMinWidth() bool          { return p.minSize.X() >= 0 }
+func (p *panelData) HasMaxWidth() bool          { return p.maxSize.X() >= 0 }
+func (p *panelData) HasMinHeight() bool         { return p.minSize.Y() >= 0 }
+func (p *panelData) HasMaxHeight() bool         { return p.maxSize.Y() >= 0 }
 
 type Panel UI
 
@@ -162,12 +171,14 @@ func (panel *Panel) Init(texture *rendering.Texture, elmType ElementType) {
 		panel.elmData = &panelData{}
 	}
 	pd = panel.elmData.innerPanelData()
+	pd.minSize = matrix.NewVec2(-1, -1)
+	pd.maxSize = matrix.NewVec2(-1, -1)
 	pd.scrollEvent = 0
 	pd.scrollDirection = PanelScrollDirectionNone
 	pd.fitContent = ContentFitBoth
-	pd.isGrid = false
 	pd.gridColumns = 0
 	pd.gridGap = matrix.Vec2Zero()
+	pd.gridTemplateColumns = nil
 	pd.enforcedColorStack = make([]matrix.Color, 0)
 	panel.postLayoutUpdate = panel.panelPostLayoutUpdate
 	panel.render = panel.panelRender
@@ -189,11 +200,21 @@ func (panel *Panel) Init(texture *rendering.Texture, elmType ElementType) {
 	panel.entity.OnDeactivate.Add(func() { panel.shaderData.Deactivate() })
 }
 
-func (p *Panel) MaxScroll() matrix.Vec2 { return p.PanelData().maxScroll }
-func (p *Panel) ScrollX() float32       { return p.PanelData().scroll.X() }
-func (p *Panel) ScrollY() float32       { return -p.PanelData().scroll.Y() }
-func (p *Panel) EnableDragScroll()      { p.PanelData().flags.setAllowDragScroll() }
-func (p *Panel) DisableDragScroll()     { p.PanelData().flags.resetAllowDragScroll() }
+func (p *Panel) MaxScroll() matrix.Vec2   { return p.PanelData().maxScroll }
+func (p *Panel) ScrollX() float32         { return p.PanelData().scroll.X() }
+func (p *Panel) ScrollY() float32         { return -p.PanelData().scroll.Y() }
+func (p *Panel) EnableDragScroll()        { p.PanelData().flags.setAllowDragScroll() }
+func (p *Panel) DisableDragScroll()       { p.PanelData().flags.resetAllowDragScroll() }
+func (p *Panel) GetMinSize() matrix.Vec2  { return p.PanelData().minSize }
+func (p *Panel) GetMaxSize() matrix.Vec2  { return p.PanelData().maxSize }
+func (p *Panel) SetMinWidth(w float32)    { p.PanelData().minSize.SetX(w) }
+func (p *Panel) SetMaxWidth(w float32)    { p.PanelData().maxSize.SetX(w) }
+func (p *Panel) SetMinHeight(h float32)   { p.PanelData().minSize.SetY(h) }
+func (p *Panel) SetMaxHeight(h float32)   { p.PanelData().maxSize.SetY(h) }
+func (p *Panel) GetAspectRatio() float32  { return p.PanelData().aspectRatio }
+func (p *Panel) SetAspectRatio(r float32) { p.PanelData().aspectRatio = r }
+func (p *Panel) GetUsesBorderBox() bool   { return p.PanelData().usesBorderBox }
+func (p *Panel) SetUsesBorderBox(v bool)  { p.PanelData().usesBorderBox = v }
 
 func (p *Panel) DontFitContentWidth() {
 	pd := p.PanelData()
@@ -415,7 +436,7 @@ func (p *Panel) updateShaderVisibility() {
 }
 
 func (p *Panel) boundsChildren(bounds *matrix.Vec2) {
-	defer tracing.NewRegion("Panel.boundsChildren").End()
+	// defer tracing.NewRegion("Panel.boundsChildren").End()
 	for _, kid := range p.entity.Children {
 		kui := FirstOnEntity(kid)
 		if kui.Layout().Positioning() == PositioningAbsolute {
@@ -465,7 +486,7 @@ func (p *Panel) panelPostLayoutUpdate() {
 	ps := p.layout.PixelSize()
 	maxSize := matrix.Vec2{}
 	maxRowsX := matrix.Float(0)
-	if pd.isGrid && pd.gridColumns > 0 {
+	if p.IsGrid() && pd.gridColumns > 0 {
 		maxSize = p.layoutGridChildren(pd, offsetStart, ps)
 		maxRowsX = maxSize.X()
 	} else {
@@ -513,6 +534,18 @@ func (p *Panel) panelPostLayoutUpdate() {
 		p.boundsChildren(&bounds)
 		w := bounds.X() + p.layout.padding.Horizontal() + p.layout.border.Horizontal()
 		h := bounds.Y() + p.layout.padding.Bottom() + p.layout.border.Bottom()
+		if pd.HasMinWidth() && w < pd.minSize.X() {
+			w = pd.minSize.X()
+		}
+		if pd.HasMaxWidth() && w > pd.maxSize.X() {
+			w = pd.maxSize.X()
+		}
+		if pd.HasMinHeight() && h < pd.minSize.Y() {
+			h = pd.minSize.Y()
+		}
+		if pd.HasMaxHeight() && h > pd.maxSize.Y() {
+			h = pd.maxSize.Y()
+		}
 		switch pd.fitContent {
 		case ContentFitWidth:
 			p.layout.ScaleWidth(max(1, w))
@@ -661,10 +694,10 @@ func (p *Panel) ResetScroll() {
 }
 
 func (p *Panel) ensureBGExists(tex *rendering.Texture) {
-	defer tracing.NewRegion("Panel.ensureBGExists").End()
 	pd := p.PanelData()
 	host := p.man.Value().Host
 	if !pd.drawing.IsValid() {
+		defer tracing.NewRegion("Panel.ensureBGExists").End()
 		if tex == nil {
 			tex, _ = host.TextureCache().Texture(
 				assets.TextureSquare, rendering.TextureFilterLinear)
@@ -801,7 +834,7 @@ func (p *Panel) SetScrollDirection(direction PanelScrollDirection) {
 	}
 }
 
-func (p *Panel) IsGrid() bool { return p.PanelData().isGrid }
+func (p *Panel) IsGrid() bool { return p.GridColumns() > 0 }
 
 func (p *Panel) GridColumns() int { return p.PanelData().gridColumns }
 
@@ -812,7 +845,7 @@ func (p *Panel) GridGap() matrix.Vec2 { return p.PanelData().gridGap }
 // children (e.g. div{width:100%}) fit their grid cell instead of full parent.
 func (p *Panel) GridCellWidth() float32 {
 	pd := p.PanelData()
-	if !pd.isGrid || pd.gridColumns <= 0 {
+	if !p.IsGrid() || pd.gridColumns <= 0 {
 		return p.layout.PixelSize().X()
 	}
 	ps := p.layout.PixelSize()
@@ -822,6 +855,16 @@ func (p *Panel) GridCellWidth() float32 {
 		gapX = 0
 	}
 	colW := (innerW - float32(pd.gridColumns-1)*gapX) / float32(pd.gridColumns)
+	if len(pd.gridTemplateColumns) == pd.gridColumns {
+		widths := p.computeGridColumnWidths(innerW, gapX)
+		if len(widths) > 0 {
+			sum := float32(0)
+			for i := range widths {
+				sum += widths[i]
+			}
+			colW = sum / float32(len(widths))
+		}
+	}
 	if colW < 1 {
 		colW = 1
 	}
@@ -838,13 +881,32 @@ func (p *Panel) SetGrid(columns int) {
 	if columns <= 0 {
 		columns = 3 // default for display: grid or auto
 	}
-	if pd.isGrid && pd.gridColumns == columns {
+	if p.IsGrid() && pd.gridColumns == columns {
 		return
 	}
-	pd.isGrid = true
 	pd.gridColumns = columns
+	if len(pd.gridTemplateColumns) != columns {
+		pd.gridTemplateColumns = nil
+	}
 	if pd.gridGap.X() == 0 && pd.gridGap.Y() == 0 {
 		pd.gridGap = matrix.NewVec2(8, 8) // sensible default gap like CSS
+	}
+	p.Base().SetDirty(DirtyTypeLayout)
+}
+
+// SetGridTemplateColumns configures explicit grid column widths.
+// Positive values are fixed pixels, negative values are fr units.
+func (p *Panel) SetGridTemplateColumns(columns []float32) {
+	pd := p.PanelData()
+	if len(columns) == 0 {
+		pd.gridTemplateColumns = nil
+		p.Base().SetDirty(DirtyTypeLayout)
+		return
+	}
+	pd.gridTemplateColumns = append(pd.gridTemplateColumns[:0], columns...)
+	pd.gridColumns = len(columns)
+	if pd.gridGap.X() == 0 && pd.gridGap.Y() == 0 {
+		pd.gridGap = matrix.NewVec2(8, 8)
 	}
 	p.Base().SetDirty(DirtyTypeLayout)
 }
@@ -857,6 +919,51 @@ func (p *Panel) SetGridGap(x, y float32) {
 	pd.gridGap.SetX(x)
 	pd.gridGap.SetY(y)
 	p.Base().SetDirty(DirtyTypeLayout)
+}
+
+func (p *Panel) computeGridColumnWidths(innerWidth, gapX float32) []float32 {
+	pd := p.PanelData()
+	cols := pd.gridColumns
+	if cols <= 0 {
+		return []float32{}
+	}
+	out := make([]float32, cols)
+	if len(pd.gridTemplateColumns) != cols {
+		colW := (innerWidth - float32(cols-1)*gapX) / float32(cols)
+		if colW < 1 {
+			colW = 1
+		}
+		for i := 0; i < cols; i++ {
+			out[i] = colW
+		}
+		return out
+	}
+	totalFixed := float32(0)
+	totalFr := float32(0)
+	for i := 0; i < cols; i++ {
+		v := pd.gridTemplateColumns[i]
+		if v >= 0 {
+			totalFixed += v
+		} else {
+			totalFr += -v
+		}
+	}
+	remaining := innerWidth - totalFixed - float32(cols-1)*gapX
+	if remaining < 0 {
+		remaining = 0
+	}
+	for i := 0; i < cols; i++ {
+		v := pd.gridTemplateColumns[i]
+		if v >= 0 {
+			out[i] = v
+		} else if totalFr > 0 {
+			out[i] = remaining * ((-v) / totalFr)
+		}
+		if out[i] < 1 {
+			out[i] = 1
+		}
+	}
+	return out
 }
 
 func (p *Panel) layoutGridChildren(pd *panelData, offsetStart matrix.Vec2, ps matrix.Vec2) matrix.Vec2 {
@@ -877,10 +984,7 @@ func (p *Panel) layoutGridChildren(pd *panelData, offsetStart matrix.Vec2, ps ma
 	if gapY < 0 {
 		gapY = 0
 	}
-	colWidth := (innerWidth - float32(pd.gridColumns-1)*gapX) / float32(pd.gridColumns)
-	if colWidth < 1 {
-		colWidth = 1
-	}
+	colWidths := p.computeGridColumnWidths(innerWidth, gapX)
 	col := 0
 	y := startY
 	rowMaxHeight := float32(0)
@@ -901,11 +1005,14 @@ func (p *Panel) layoutGridChildren(pd *panelData, offsetStart matrix.Vec2, ps ma
 		}
 		kSize := kLayout.PixelSize()
 		margin := kLayout.Margin()
-		cellX := startX + float32(col)*(colWidth+gapX)
+		cellX := startX
+		for i := 0; i < col && i < len(colWidths); i++ {
+			cellX += colWidths[i] + gapX
+		}
 		x := cellX + margin.X() // left aligned like CSS start
 		itemY := y + margin.Y()
 		kLayout.SetRowLayoutOffset(matrix.NewVec2(x, itemY))
-		right := x + kSize.X() + margin.Z()
+		right := (x - startX) + kSize.X() + margin.Z()
 		contentSize.SetX(matrix.Max(contentSize.X(), right))
 		itemHeight := kSize.Y() + margin.Vertical()
 		rowMaxHeight = matrix.Max(rowMaxHeight, itemHeight)
@@ -979,7 +1086,7 @@ func (p *Panel) updateScrollBars() {
 		maxX := pd.maxScroll.X()
 		if !matrix.Approx(pd.scrollBarDrag.X(), 0) {
 			mx := p.Base().Host().Window.Cursor.Position().X()
-			mouseDelta := pd.scrollBarDrag.Y() - mx
+			mouseDelta := pd.scrollBarDrag.X() - mx
 			startOffset := pd.scrollBarStart
 			newOffset := startOffset + mouseDelta
 			maxX := pd.maxScroll.X()
@@ -1074,7 +1181,6 @@ func (p *Panel) SetBorderColor(left, top, right, bottom matrix.Color) {
 }
 
 func (p *Panel) SetUseBlending(useBlending bool) {
-	defer tracing.NewRegion("Panel.SetUseBlending").End()
 	p.recreateDrawing()
 	pd := p.PanelData()
 	host := p.man.Value().Host
@@ -1107,7 +1213,6 @@ func (p *Panel) HasEnforcedColor() bool {
 }
 
 func (p *Panel) setColorInternal(bgColor matrix.Color) {
-	defer tracing.NewRegion("Panel.setColorInternal").End()
 	p.ensureBGExists(nil)
 	if p.shaderData.FgColor.Equals(bgColor) {
 		return

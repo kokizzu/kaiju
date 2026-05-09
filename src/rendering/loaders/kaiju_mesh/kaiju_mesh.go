@@ -48,6 +48,7 @@ import (
 	"kaijuengine.com/engine/collision"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/concurrent"
+	"kaijuengine.com/platform/profiler/tracing"
 	"kaijuengine.com/rendering"
 	"kaijuengine.com/rendering/loaders/load_result"
 )
@@ -80,6 +81,7 @@ type KaijuMesh struct {
 	Name       string
 	Verts      []rendering.Vertex
 	Indexes    []uint32
+	BVH        *collision.TriangleBVH
 	Animations []KaijuMeshAnimation
 	Joints     []KaijuMeshJoint
 }
@@ -89,6 +91,7 @@ type KaijuMesh struct {
 // [KaijuMesh]. This is typically used for the editor, but games/applications
 // may find some use for it.
 func LoadedResultToKaijuMesh(res load_result.Result) []KaijuMesh {
+	defer tracing.NewRegion("kaiju_mesh.LoadedResultToKaijuMesh").End()
 	out := make([]KaijuMesh, 0, len(res.Meshes))
 	for i := range res.Meshes {
 		m := &res.Meshes[i]
@@ -112,17 +115,20 @@ func LoadedResultToKaijuMesh(res load_result.Result) []KaijuMesh {
 }
 
 // Serialize will convert a [KaijuMesh] into a byte array for saving to the
-// database or later use. This serialization uses the built-in [pod.Encoder]
+// database or later use.
 func (k KaijuMesh) Serialize() ([]byte, error) {
-	w := bytes.NewBuffer([]byte{})
-	enc := gob.NewEncoder(w)
-	err := enc.Encode(k)
-	return w.Bytes(), err
+	defer tracing.NewRegion("KaijuMesh.Serialize").End()
+	return serializeNative(k)
 }
 
 // Deserialize will construct a [KaijuMesh] from the given array of bytes. This
-// deserialization uses the built-in [pod.Decoder]
+// supports the current native mesh format and falls back to gob for legacy
+// assets.
 func Deserialize(data []byte) (KaijuMesh, error) {
+	defer tracing.NewRegion("kaiju_mesh.Deserialize").End()
+	if isNativeMesh(data) {
+		return deserializeNative(data)
+	}
 	r := bytes.NewReader(data)
 	dec := gob.NewDecoder(r)
 	var km KaijuMesh
@@ -131,6 +137,7 @@ func Deserialize(data []byte) (KaijuMesh, error) {
 }
 
 func ReadMesh(id string, host *engine.Host) (KaijuMesh, error) {
+	defer tracing.NewRegion("kaiju_mesh.ReadMesh").End()
 	data, err := host.AssetDatabase().Read(id)
 	if err != nil {
 		slog.Error("failed to read the mesh", "id", id, "error", err)
@@ -139,26 +146,71 @@ func ReadMesh(id string, host *engine.Host) (KaijuMesh, error) {
 	return Deserialize(data)
 }
 
-func (k KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+func (k *KaijuMesh) EnsureBVH() {
+	defer tracing.NewRegion("KaijuMesh.EnsureBVH").End()
+	if k.BVH == nil {
+		k.BVH = k.GenerateBVHArchive()
+	}
+}
+
+func (k *KaijuMesh) GenerateBVHArchive() *collision.TriangleBVH {
+	defer tracing.NewRegion("KaijuMesh.GenerateBVHArchive").End()
+	return collision.NewTriangleBVH(k.generateBVH(nil, nil, nil))
+}
+
+func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+	defer tracing.NewRegion("KaijuMesh.GenerateBVH").End()
+	if k.BVH == nil {
+		k.BVH = k.GenerateBVHArchive()
+		if k.BVH == nil {
+			return nil
+		}
+	}
+	bvh := k.BVH.ToBVH(transform, data)
+	bvh.Refit()
+	return bvh
+}
+
+func (k KaijuMesh) generateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+	defer tracing.NewRegion("KaijuMesh.generateBVH").End()
+	tris := k.bvhTriangles(threads)
+	return collision.NewBVH(tris, transform, data)
+}
+
+func (k KaijuMesh) bvhTriangles(threads *concurrent.Threads) []collision.HitObject {
+	defer tracing.NewRegion("KaijuMesh.bvhTriangles").End()
 	tris := make([]collision.HitObject, len(k.Indexes)/3)
-	group := sync.WaitGroup{}
+	if len(tris) == 0 {
+		return tris
+	}
 	construct := func(from, to int) {
-		for i := from; i < to; i += 3 {
+		for tri := from; tri < to; tri++ {
+			i := tri * 3
 			points := [3]matrix.Vec3{
 				k.Verts[k.Indexes[i]].Position,
 				k.Verts[k.Indexes[i+1]].Position,
 				k.Verts[k.Indexes[i+2]].Position,
 			}
-			tris[i/3] = collision.DetailedTriangleFromPoints(points)
+			tris[tri] = collision.DetailedTriangleFromPoints(points)
 		}
-		group.Done()
 	}
-	work := make([]func(int), len(tris))
-	group.Add(len(work))
+	if threads == nil || threads.ThreadCount() == 0 || len(tris) == 1 {
+		construct(0, len(tris))
+		return tris
+	}
+	group := sync.WaitGroup{}
+	workCount := min(threads.ThreadCount(), len(tris))
+	work := make([]func(int), workCount)
+	group.Add(workCount)
 	for i := range work {
-		work[i] = func(int) { construct(i*3, (i+1)*3) }
+		from := i * len(tris) / workCount
+		to := (i + 1) * len(tris) / workCount
+		work[i] = func(int) {
+			construct(from, to)
+			group.Done()
+		}
 	}
 	threads.AddWork(work)
 	group.Wait()
-	return collision.NewBVH(tris, transform, data)
+	return tris
 }

@@ -50,17 +50,19 @@ type History struct {
 	limit            int
 	savedPosition    int
 	transactionDepth int
-	lockAdditions    bool
+	lockAdditions    int
 }
 
 // Initialize sets the max number of undo entries that the history will retain.
 func (h *History) Initialize(limit int) { h.limit = limit }
 
 // LockAdditions prevents new mementos from being added to the history.
-func (h *History) LockAdditions() { h.lockAdditions = true }
+func (h *History) LockAdditions() { h.lockAdditions++ }
 
 // UnlockAdditions re-enables adding new mementos after a lock.
-func (h *History) UnlockAdditions() { h.lockAdditions = false }
+func (h *History) UnlockAdditions() { h.lockAdditions-- }
+
+func (h *History) AreAdditionsLocked() bool { return h.lockAdditions > 0 }
 
 // IsInTransaction reports whether a history transaction is currently active.
 func (h *History) IsInTransaction() bool { return h.transaction != nil }
@@ -107,7 +109,7 @@ func (h *History) Add(m Memento) {
 		h.transaction.stack = append(h.transaction.stack, m)
 		return
 	}
-	if h.lockAdditions {
+	if h.AreAdditionsLocked() {
 		return
 	}
 	for i := len(h.undoStack) - 1; i >= h.position; i-- {
@@ -141,7 +143,7 @@ func (h *History) AddOrReplaceLast(m Memento) {
 		h.transaction.stack = append(h.transaction.stack, m)
 		return
 	}
-	if h.lockAdditions {
+	if h.AreAdditionsLocked() {
 		return
 	}
 	if h.position > 0 {

@@ -1621,3 +1621,68 @@ func (g GPUPipelineStageFlags) toVulkan() vk.PipelineStageFlags {
 	}
 	return flags
 }
+
+var (
+	gpuPipelineBindPointToVulkan = map[GPUPipelineBindPoint]vulkan_const.PipelineBindPoint{
+		GPUPipelineBindPointGraphics:      vulkan_const.PipelineBindPointGraphics,
+		GPUPipelineBindPointCompute:       vulkan_const.PipelineBindPointCompute,
+		GPUPipelineBindPointRaytracingNvx: vulkan_const.PipelineBindPointRaytracingNvx,
+	}
+	gpuPipelineBindPointFromVulkan = map[vulkan_const.PipelineBindPoint]GPUPipelineBindPoint{
+		vulkan_const.PipelineBindPointGraphics:      GPUPipelineBindPointGraphics,
+		vulkan_const.PipelineBindPointCompute:       GPUPipelineBindPointCompute,
+		vulkan_const.PipelineBindPointRaytracingNvx: GPUPipelineBindPointRaytracingNvx,
+	}
+	gpuDependencyFlagBits = []GPUDependencyFlags{
+		GPUDependencyByRegionBit,
+		GPUDependencyViewLocalBit,
+		GPUDependencyDeviceGroupBit,
+	}
+	vkDependencyFlagBits = []vulkan_const.DependencyFlagBits{
+		vulkan_const.DependencyByRegionBit,
+		vulkan_const.DependencyViewLocalBit,
+		vulkan_const.DependencyDeviceGroupBit,
+	}
+	_ = [unsafe.Sizeof(gpuDependencyFlagBits)/unsafe.Sizeof(gpuDependencyFlagBits[0]) - unsafe.Sizeof(vkDependencyFlagBits)/unsafe.Sizeof(vkDependencyFlagBits[0])]struct{}{}
+)
+
+func (g GPUPipelineBindPoint) toVulkan() vulkan_const.PipelineBindPoint {
+	defer tracing.NewRegion("GPUPipelineBindPoint.toVulkan").End()
+	out, ok := gpuPipelineBindPointToVulkan[g]
+	if !ok {
+		panic("invalid pipeline bind point supplied")
+	}
+	return out
+}
+
+func (g *GPUPipelineBindPoint) fromVulkan(val vulkan_const.PipelineBindPoint) {
+	defer tracing.NewRegion("GPUPipelineBindPoint.fromVulkan").End()
+	out, ok := gpuPipelineBindPointFromVulkan[val]
+	if !ok {
+		panic("invalid pipeline bind point supplied")
+	}
+	*g = out
+}
+
+func (g *GPUDependencyFlags) fromVulkan(val vk.DependencyFlags) {
+	defer tracing.NewRegion("GPUDependencyFlags.fromVulkan").End()
+	var flags GPUDependencyFlags
+	for i := range vkDependencyFlagBits {
+		if val&vk.DependencyFlags(vkDependencyFlagBits[i]) != 0 {
+			flags |= gpuDependencyFlagBits[i]
+		}
+	}
+	*g = flags
+}
+
+func (g GPUDependencyFlags) toVulkan() vk.DependencyFlags {
+	defer tracing.NewRegion("GPUDependencyFlags.toVulkan").End()
+	val := g
+	var flags vk.DependencyFlags
+	for i := range gpuDependencyFlagBits {
+		if val&gpuDependencyFlagBits[i] != 0 {
+			flags |= vk.DependencyFlags(vkDependencyFlagBits[i])
+		}
+	}
+	return flags
+}

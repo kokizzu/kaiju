@@ -49,57 +49,85 @@ import (
 )
 
 func (p Width) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	var width float32
-	var err error = nil
+	if len(values) != 1 {
+		return fmt.Errorf("expected exactly 1 value but got %d", len(values))
+	}
+
 	if values[0].Str == "initial" {
 		return nil
 	}
-	if len(values) != 1 {
-		err = fmt.Errorf("expected exactly 1 value but got %d", len(values))
-	} else if values[0].Str == "fit-content" {
+
+	if values[0].Str == "fit-content" {
 		panel.FitContentWidth()
 		return nil
-	} else {
-		width = helpers.NumFromLength(values[0].Str, host.Window)
 	}
-	if err == nil {
-		panel.DontFitContentWidth()
-		l := panel.Base().Layout()
-		if strings.HasSuffix(values[0].Str, "%") {
-			if l.Ui().Entity().IsRoot() {
-				l.ScaleWidth(float32(host.Window.Width()) * width)
+
+	width := helpers.NumFromLength(values[0].Str, host.Window)
+
+	panel.DontFitContentWidth()
+	l := panel.Base().Layout()
+	c := currentSizingConstraints(panel)
+	if c.HasBoxSizing() && !c.UsesBorderBox() {
+		width += l.Padding().Horizontal() + l.Border().Horizontal()
+	}
+	width = applyWidthConstraints(panel, width)
+	if strings.HasSuffix(values[0].Str, "%") {
+		if l.Ui().Entity().IsRoot() {
+			finalW := applyWidthConstraints(panel, float32(host.Window.Width())*width)
+			l.ScaleWidth(finalW)
+			if c.HasAspectRatio() && c.AspectRatio > 0 {
+				l.ScaleHeight(applyHeightConstraints(panel, finalW/c.AspectRatio))
+			}
+			return nil
+		}
+		pUI := ui.FirstOnEntity(l.Ui().Entity().Parent)
+		if pUI != nil {
+			parentPanel := pUI.ToPanel()
+			if parentPanel.IsGrid() {
+				// Child % width resolves to grid cell width (fixes div{ width: 100%; } in grid)
+				cellW := parentPanel.GridCellWidth()
+				finalW := applyWidthConstraints(panel, cellW*width)
+				l.ScaleWidth(finalW)
+				if c.HasAspectRatio() && c.AspectRatio > 0 {
+					l.ScaleHeight(applyHeightConstraints(panel, finalW/c.AspectRatio))
+				}
 				return nil
 			}
-			pUI := ui.FirstOnEntity(l.Ui().Entity().Parent)
-			if pUI != nil {
-				parentPanel := pUI.ToPanel()
-				if parentPanel.IsGrid() {
-					// Child % width resolves to grid cell width (fixes div{ width: 100%; } in grid)
-					cellW := parentPanel.GridCellWidth()
-					l.ScaleWidth(cellW * width)
-					return nil
-				}
-				pLayout := pUI.Layout()
-				os := pLayout.PixelSize().X()
-				s := os
-				s -= pLayout.Padding().Horizontal()
-				s -= pLayout.Border().Horizontal()
-				if os > 0 && s < 0 {
-					s = 0.001
-				}
-				l.ScaleWidth(s * width)
+			pLayout := pUI.Layout()
+			os := pLayout.PixelSize().X()
+			s := os
+			s -= pLayout.Padding().Horizontal()
+			s -= pLayout.Border().Horizontal()
+			if os > 0 && s < 0 {
+				s = 0.001
 			}
-		} else if values[0].IsFunction() {
-			if values[0].Str == "calc" {
-				val := values[0]
-				val.Args = append(val.Args, "width")
-				res, _ := functions.Calc{}.Process(panel, elm, val)
-				width = helpers.NumFromLength(res, host.Window)
-				l.ScaleWidth(width)
+			finalW := applyWidthConstraints(panel, s*width)
+			l.ScaleWidth(finalW)
+			if c.HasAspectRatio() && c.AspectRatio > 0 {
+				l.ScaleHeight(applyHeightConstraints(panel, finalW/c.AspectRatio))
 			}
-		} else {
-			panel.Base().Layout().ScaleWidth(width)
+		}
+	} else if values[0].IsFunction() {
+		if values[0].Str == "calc" {
+			val := values[0]
+			val.Args = append(val.Args, "width")
+			res, _ := functions.Calc{}.Process(panel, elm, val)
+			width = helpers.NumFromLength(res, host.Window)
+			if c.HasBoxSizing() && !c.UsesBorderBox() {
+				width += l.Padding().Horizontal() + l.Border().Horizontal()
+			}
+			width = applyWidthConstraints(panel, width)
+			l.ScaleWidth(width)
+			if c.HasAspectRatio() && c.AspectRatio > 0 {
+				l.ScaleHeight(applyHeightConstraints(panel, width/c.AspectRatio))
+			}
+		}
+	} else {
+		panel.Base().Layout().ScaleWidth(width)
+		if c.HasAspectRatio() && c.AspectRatio > 0 {
+			l.ScaleHeight(applyHeightConstraints(panel, width/c.AspectRatio))
 		}
 	}
-	return err
+
+	return nil
 }

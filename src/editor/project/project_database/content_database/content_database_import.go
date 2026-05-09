@@ -101,10 +101,14 @@ func (r *ImportResult) ConfigPath() project_file_system.ConfigPath {
 	return r.ContentPath().ToConfigPath()
 }
 
-func (r *ImportResult) generateUniqueFileId(fs *project_file_system.FileSystem) string {
+func (r *ImportResult) generateUniqueFileId(fs *project_file_system.FileSystem, ext string) string {
 	defer tracing.NewRegion("ImportResult.generateUniqueFileId").End()
+	ext = strings.TrimSpace(ext)
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
 	for {
-		r.Id = uuid.NewString()
+		r.Id = uuid.Must(uuid.NewV7()).String() + ext
 		if _, err := fs.Stat(r.ContentPath().String()); err == nil {
 			continue
 		}
@@ -177,7 +181,8 @@ func reimportByNameMatching(cat ContentCategory, id string, cache *Cache, fs *pr
 	for i := range proc.Variants {
 		if proc.Variants[i].Name == cc.Config.SrcName {
 			return ProcessedImport{
-				Variants: []ImportVariant{proc.Variants[i]},
+				Variants:        []ImportVariant{proc.Variants[i]},
+				postProcessData: proc.postProcessData,
 			}, nil
 		}
 	}

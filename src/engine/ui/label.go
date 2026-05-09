@@ -365,7 +365,6 @@ func (label *Label) UnEnforceBGColor() {
 }
 
 func (label *Label) SetBGColor(newColor matrix.Color) {
-	defer tracing.NewRegion("Label.SetBGColor").End()
 	ld := label.LabelData()
 	if ld.isForcedBGColor || ld.bgColor.Equals(newColor) {
 		return
@@ -444,7 +443,6 @@ func (label *Label) findColorRange(start, end int) *colorRange {
 }
 
 func (label *Label) ColorRange(start, end int, newColor, bgColor matrix.Color) {
-	defer tracing.NewRegion("Label.ColorRange").End()
 	cRange := label.findColorRange(start, end)
 	cRange.hue = newColor
 	cRange.bgHue = bgColor
@@ -513,7 +511,6 @@ func (label *Label) SetFontStyle(style string) {
 }
 
 func (label *Label) CalculateMaxWidth() float32 {
-	defer tracing.NewRegion("Label.CalculateMaxWidth").End()
 	var maxWidth matrix.Float
 	parent := label.entity.Parent
 	//if parent == nil || (p.Base().layout.Positioning() == PositioningAbsolute && p.FittingContent()) {

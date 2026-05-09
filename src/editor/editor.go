@@ -45,6 +45,7 @@ import (
 	"kaijuengine.com/editor/editor_events"
 	"kaijuengine.com/editor/editor_logging"
 	"kaijuengine.com/editor/editor_overlay/ai_prompt"
+	"kaijuengine.com/editor/editor_overlay/context_menu"
 	"kaijuengine.com/editor/editor_plugin"
 	"kaijuengine.com/editor/editor_settings"
 	"kaijuengine.com/editor/editor_stage_manager/editor_stage_view"
@@ -67,6 +68,7 @@ import (
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/hid"
 	"kaijuengine.com/platform/profiler/tracing"
+	"kaijuengine.com/rendering"
 )
 
 // Editor is the entry point structure for the entire editor. It acts as the
@@ -90,6 +92,7 @@ type Editor struct {
 	events           editor_events.EditorEvents
 	stageView        editor_stage_view.StageView
 	plugins          []editor_plugin.EditorPlugin
+	fileDropRouter   FileDropRouter
 	window           struct {
 		activateId     events.Id
 		deactivateId   events.Id
@@ -190,6 +193,7 @@ func (ed *Editor) postProjectLoad() {
 	ed.workspaces.vfx.Initialize(ed.host, ed)
 	ed.workspaces.ui.Initialize(ed.host, ed)
 	ed.workspaces.settings.Initialize(ed.host, ed)
+	ed.connectFileDropRouter()
 	ed.setWorkspaceState(WorkspaceStateStage)
 	// goroutine
 	go ed.project.CompileDebug()
@@ -205,10 +209,16 @@ func (ed *Editor) postProjectLoad() {
 		}
 		ed.plugins = append(ed.plugins, v)
 	}
+	// Pre-warm the, quite large, material icons PNG file
+	ed.host.TextureCache().Texture("MaterialIcons-Regular.png", rendering.TextureFilterLinear)
 }
 
 func (ed *Editor) update(deltaTime float64) {
 	if ed.blurred {
+		return
+	}
+	if context_menu.IsOpen() {
+		ed.currentWorkspace.Update(deltaTime)
 		return
 	}
 	kb := &ed.host.Window.Keyboard

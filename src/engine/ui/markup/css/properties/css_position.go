@@ -49,28 +49,28 @@ import (
 func (p Position) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	if len(values) != 1 {
 		return errors.New("Position requires 1 value")
-	} else {
-		var err error
-		switch values[0].Str {
-		case "static":
-			panel.Base().Layout().SetPositioning(ui.PositioningStatic)
-		case "absolute":
-			panel.Base().Layout().SetPositioning(ui.PositioningAbsolute)
-		case "fixed":
-			panel.Base().Layout().SetPositioning(ui.PositioningFixed)
-		case "relative":
-			panel.Base().Layout().SetPositioning(ui.PositioningRelative)
-		case "sticky":
-			panel.Base().Layout().SetPositioning(ui.PositioningSticky)
-		case "initial":
-			panel.Base().Layout().SetPositioning(ui.PositioningStatic)
-		case "inherit":
-			if elm.Parent.Value() != nil {
-				panel.Base().Layout().SetPositioning(elm.UI.Layout().Positioning())
-			}
-		default:
-			err = errors.New("Position invalid position value")
-		}
-		return err
 	}
+
+	switch values[0].Str {
+	case "static":
+		panel.Base().Layout().SetPositioning(ui.PositioningStatic)
+	case "absolute":
+		panel.Base().Layout().SetPositioning(ui.PositioningAbsolute)
+	case "fixed":
+		panel.Base().Layout().SetPositioning(ui.PositioningFixed)
+	case "relative":
+		panel.Base().Layout().SetPositioning(ui.PositioningRelative)
+	case "sticky":
+		panel.Base().Layout().SetPositioning(ui.PositioningSticky)
+	case "initial":
+		panel.Base().Layout().SetPositioning(ui.PositioningStatic)
+	case "inherit":
+		if elm.Parent.Value() != nil {
+			panel.Base().Layout().SetPositioning(elm.UI.Layout().Positioning())
+		}
+	default:
+		return errors.New("Position invalid position value")
+	}
+
+	return nil
 }

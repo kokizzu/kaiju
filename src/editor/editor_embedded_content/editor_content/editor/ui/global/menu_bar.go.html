@@ -39,7 +39,6 @@
 			}
 			.popup {
 				position: absolute;
-				display: none;
 				top: var(--ed-menu-bar-height);
 				color: #AAA;
 				width: 200px;
@@ -47,7 +46,7 @@
 				border: 2px solid #AAA;
 				z-index: 90;
 			}
-			.popupEntry { background-color: #121212; }
+			.popupEntry { background-color: #121212; width: 100%; }
 			.popupEntry:hover { color: white; background-color: #575757; }
 			hr {
 				background-color: #AAA;
@@ -60,6 +59,7 @@
 			<span class="menuEntry" data-target="filePopup" onclick="clickFile">File</span>
 			<span class="menuEntry" data-target="editPopup" onclick="clickEdit">Edit</span>
 			<span class="menuEntry" data-target="createPopup" onclick="clickCreate">Create</span>
+			<span class="menuEntry" data-target="viewPopup" onclick="clickView">View</span>
 			<span class="menuEntry" data-target="helpPopup" onclick="clickHelp">Help</span>
 			<span id="tabStage" group="tabs" class="workspaceTab edPanelBgHoverable tabSelected" onclick="clickStage">Stage</span>
 			<span id="tabContent" group="tabs" class="workspaceTab edPanelBgHoverable" onclick="clickContent">Content</span>
@@ -104,9 +104,14 @@
 			<div class="popupEntry" onclick="clickCreateTemplate">Template selected (ctrl + t)</div>
 			<div class="popupEntry" onclick="clickCreateEntityData">Entity Data</div>
 			<div class="popupEntry" onclick="clickCreateHtmlUi">HTML UI</div>
+			<div class="popupEntry" onclick="clickCreateCssStylesheet">Css Stylesheet</div>
 			<div class="popupEntry" onclick="clickNewCamera">Camera</div>
 			<div class="popupEntry" onclick="clickNewEntity">Entity</div>
 			<div class="popupEntry" onclick="clickNewLight">Light</div>
+		</div>
+		<div id="viewPopup" class="popup" onmiss="popupMiss">
+			<div class="popupEntry" onclick="clickToggleGrid">{{if .ShowGrid}}Hide Grid{{else}}Show Grid{{end}}</div>
+			<div class="popupEntry" onclick="clickScreenshot">Screenshot</div>
 		</div>
 		<div id="helpPopup" class="popup" onmiss="popupMiss">
 			<div class="popupEntry" onclick="clickSponsors">Sponsors</div>

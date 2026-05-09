@@ -387,27 +387,27 @@ func (p *RenderPass) Recontstruct(device *GPUDevice) error {
 		resolve[i] = make([]vk.AttachmentReference, len(ra))
 		for j := range car {
 			color[i][j].Attachment = car[j].Attachment
-			color[i][j].Layout = car[j].Layout
+			color[i][j].Layout = car[j].Layout.toVulkan()
 		}
 		for j := range iar {
 			input[i][j].Attachment = iar[j].Attachment
-			input[i][j].Layout = iar[j].Layout
+			input[i][j].Layout = iar[j].Layout.toVulkan()
 		}
 		copy(preserve[i], pa)
 		for j := range dsa {
 			depthStencil[i][j].Attachment = dsa[j].Attachment
-			depthStencil[i][j].Layout = dsa[j].Layout
+			depthStencil[i][j].Layout = dsa[j].Layout.toVulkan()
 		}
 		for j := range ra {
 			resolve[i][j].Attachment = ra[j].Attachment
-			resolve[i][j].Layout = ra[j].Layout
+			resolve[i][j].Layout = ra[j].Layout.toVulkan()
 		}
 	}
 	subpasses := make([]vk.SubpassDescription, len(r.SubpassDescriptions))
 	for i := range r.SubpassDescriptions {
 		// TODO:  Fill in the flags
 		subpasses[i].Flags = 0
-		subpasses[i].PipelineBindPoint = r.SubpassDescriptions[i].PipelineBindPoint
+		subpasses[i].PipelineBindPoint = r.SubpassDescriptions[i].PipelineBindPoint.toVulkan()
 		subpasses[i].ColorAttachmentCount = uint32(len(color[i]))
 		subpasses[i].InputAttachmentCount = uint32(len(input[i]))
 		subpasses[i].PreserveAttachmentCount = uint32(len(preserve[i]))
@@ -431,11 +431,11 @@ func (p *RenderPass) Recontstruct(device *GPUDevice) error {
 	for i := range r.SubpassDependencies {
 		selfDependencies[i].SrcSubpass = r.SubpassDependencies[i].SrcSubpass
 		selfDependencies[i].DstSubpass = r.SubpassDependencies[i].DstSubpass
-		selfDependencies[i].SrcStageMask = r.SubpassDependencies[i].SrcStageMask
-		selfDependencies[i].DstStageMask = r.SubpassDependencies[i].DstStageMask
-		selfDependencies[i].SrcAccessMask = r.SubpassDependencies[i].SrcAccessMask
-		selfDependencies[i].DstAccessMask = r.SubpassDependencies[i].DstAccessMask
-		selfDependencies[i].DependencyFlags = r.SubpassDependencies[i].DependencyFlags
+		selfDependencies[i].SrcStageMask = r.SubpassDependencies[i].SrcStageMask.toVulkan()
+		selfDependencies[i].DstStageMask = r.SubpassDependencies[i].DstStageMask.toVulkan()
+		selfDependencies[i].SrcAccessMask = r.SubpassDependencies[i].SrcAccessMask.toVulkan()
+		selfDependencies[i].DstAccessMask = r.SubpassDependencies[i].DstAccessMask.toVulkan()
+		selfDependencies[i].DependencyFlags = r.SubpassDependencies[i].DependencyFlags.toVulkan()
 	}
 	info := vk.RenderPassCreateInfo{}
 	info.SType = vulkan_const.StructureTypeRenderPassCreateInfo

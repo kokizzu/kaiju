@@ -146,7 +146,7 @@ func (a *SkinAnimation) Interpolate(from, to SkinAnimationFrame) [4]float32 {
 	t0 := from.AbsTime
 	t1 := to.AbsTime
 	if t1 < t0 {
-		t1 += t0
+		t1 += a.totalTime
 	}
 	t := (a.time - t0) / (t1 - t0)
 	switch from.Bone.PathType {

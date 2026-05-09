@@ -200,6 +200,7 @@ func (host *Host) Initialize(width, height, x, y int, platformState any) error {
 		return err
 	}
 	host.Window = win
+
 	host.threads.Start()
 	host.updateThreads.Start()
 	host.uiThreads.Start()
@@ -237,6 +238,16 @@ func (host *Host) InitializeRenderer() error {
 	if err := rendering.SetupLightMaterials(host.MaterialCache()); err != nil {
 		slog.Error("failed to setup the light materials", "error", err)
 		return err
+	}
+	if runtime.GOOS == "windows" {
+		wHost := weak.Make(host)
+		host.Window.OnMove.Add(func() {
+			host := wHost.Value()
+			if host == nil || host.Closing || host.Window == nil {
+				return
+			}
+			host.Render()
+		})
 	}
 	return nil
 }

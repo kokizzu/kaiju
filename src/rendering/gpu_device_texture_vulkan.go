@@ -279,10 +279,10 @@ func (g *GPUDevice) generateMipMapsImpl(texId *TextureId, imageFormat GPUFormat,
 	return nil
 }
 
-func (g *GPUDevice) textureReadImpl(texture *Texture) ([]byte, error) {
+func (g *GPUDevice) textureReadImpl(id *TextureId) ([]byte, error) {
 	defer tracing.NewRegion("GPUDevice.textureReadImpl").End()
-	id := &texture.RenderId
 	origLayout := id.Layout
+	origAccess := id.Access
 	const transferSrcLayout = GPUImageLayoutTransferSrcOptimal
 	if origLayout != transferSrcLayout {
 		g.TransitionImageLayout(id, transferSrcLayout, GPUImageAspectColorBit, id.Access, nil)
@@ -295,7 +295,7 @@ func (g *GPUDevice) textureReadImpl(texture *Texture) ([]byte, error) {
 		GPUMemoryPropertyHostVisibleBit|GPUMemoryPropertyHostCoherentBit)
 	if err != nil {
 		if origLayout != transferSrcLayout {
-			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 		}
 		return []byte{}, fmt.Errorf("failed to create staging buffer")
 	}
@@ -327,7 +327,7 @@ func (g *GPUDevice) textureReadImpl(texture *Texture) ([]byte, error) {
 		g.FreeMemory(stagingMem)
 		g.LogicalDevice.dbg.remove(stagingMem.handle)
 		if origLayout != transferSrcLayout {
-			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 		}
 		return []byte{}, fmt.Errorf("failed to map staging memory")
 	}
@@ -340,7 +340,7 @@ func (g *GPUDevice) textureReadImpl(texture *Texture) ([]byte, error) {
 	g.FreeMemory(stagingMem)
 	g.LogicalDevice.dbg.remove(stagingMem.handle)
 	if origLayout != transferSrcLayout {
-		g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+		g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 	}
 	return data, nil
 }
@@ -350,6 +350,7 @@ func (g *GPUDevice) textureReadPixelImpl(texture *Texture, x, y int) matrix.Colo
 	var zero matrix.Color
 	id := &texture.RenderId
 	origLayout := id.Layout
+	origAccess := id.Access
 	const transferSrcLayout = GPUImageLayoutTransferSrcOptimal
 	if origLayout != transferSrcLayout {
 		g.TransitionImageLayout(id, transferSrcLayout, GPUImageAspectColorBit, id.Access, nil)
@@ -359,7 +360,7 @@ func (g *GPUDevice) textureReadPixelImpl(texture *Texture, x, y int) matrix.Colo
 		GPUMemoryPropertyHostVisibleBit|GPUMemoryPropertyHostCoherentBit)
 	if err != nil {
 		if origLayout != transferSrcLayout {
-			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 		}
 		return zero
 	}
@@ -387,7 +388,7 @@ func (g *GPUDevice) textureReadPixelImpl(texture *Texture, x, y int) matrix.Colo
 	}
 	vk.CmdCopyImageToBuffer(cmd.buffer, vk.Image(id.Image.handle),
 		transferSrcLayout.toVulkan(), vk.Buffer(stagingBuf.handle), 1, &region)
-	defer g.endSingleTimeCommands(cmd)
+	g.endSingleTimeCommands(cmd)
 	var pixelData unsafe.Pointer
 	if err = g.MapMemory(stagingMem, 0, 4, 0, &pixelData); err != nil {
 		g.DestroyBuffer(stagingBuf)
@@ -395,7 +396,7 @@ func (g *GPUDevice) textureReadPixelImpl(texture *Texture, x, y int) matrix.Colo
 		g.FreeMemory(stagingMem)
 		g.LogicalDevice.dbg.remove(stagingMem.handle)
 		if origLayout != transferSrcLayout {
-			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+			g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 		}
 		return zero
 	}
@@ -406,7 +407,7 @@ func (g *GPUDevice) textureReadPixelImpl(texture *Texture, x, y int) matrix.Colo
 	g.FreeMemory(stagingMem)
 	g.LogicalDevice.dbg.remove(stagingMem.handle)
 	if origLayout != transferSrcLayout {
-		g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, id.Access, nil)
+		g.TransitionImageLayout(id, origLayout, GPUImageAspectColorBit, origAccess, nil)
 	}
 	return matrix.Color{
 		float32(raw[0]) / 255.0,

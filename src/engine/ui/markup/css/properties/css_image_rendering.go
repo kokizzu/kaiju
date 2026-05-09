@@ -47,10 +47,12 @@ import (
 )
 
 func (p ImageRendering) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	var err error = nil
 	if len(values) == 0 {
 		return errors.New("ImageRendering requires a value")
 	}
+
+	var err error = nil
+
 	switch values[0].Str {
 	case "crisp-edges":
 		tex := panel.Background()
@@ -77,5 +79,6 @@ func (p ImageRendering) Process(panel *ui.Panel, elm *document.Element, values [
 	default:
 		return errors.New("invalid value for ImageRendering")
 	}
+
 	return nil
 }

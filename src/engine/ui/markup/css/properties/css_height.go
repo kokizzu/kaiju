@@ -49,37 +49,59 @@ import (
 )
 
 func (p Height) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	var height float32
-	var err error = nil
 	if len(values) != 1 {
-		err = fmt.Errorf("expected exactly 1 value but got %d", len(values))
-	} else {
-		height = helpers.NumFromLength(values[0].Str, host.Window)
+		return fmt.Errorf("expected exactly 1 value but got %d", len(values))
 	}
-	if err == nil {
-		panel.DontFitContentHeight()
-		l := panel.Base().Layout()
-		if strings.HasSuffix(values[0].Str, "%") {
-			if l.Ui().Entity().IsRoot() {
-				l.ScaleHeight(float32(host.Window.Height()) * height)
-				return nil
+
+	height := helpers.NumFromLength(values[0].Str, host.Window)
+
+	panel.DontFitContentHeight()
+	l := panel.Base().Layout()
+	c := currentSizingConstraints(panel)
+	if c.HasBoxSizing() && !c.UsesBorderBox() {
+		height += l.Padding().Vertical() + l.Border().Vertical()
+	}
+
+	height = applyHeightConstraints(panel, height)
+	if strings.HasSuffix(values[0].Str, "%") {
+		if l.Ui().Entity().IsRoot() {
+			finalH := applyHeightConstraints(panel, float32(host.Window.Height())*height)
+			l.ScaleHeight(finalH)
+			if c.HasAspectRatio() && c.AspectRatio > 0 {
+				l.ScaleWidth(applyWidthConstraints(panel, finalH*c.AspectRatio))
 			}
-			pLayout := ui.FirstOnEntity(l.Ui().Entity().Parent).Layout()
-			s := pLayout.PixelSize().Y()
-			s -= pLayout.Padding().Vertical()
-			s -= pLayout.Border().Vertical()
-			l.ScaleHeight(s * height)
-		} else if values[0].IsFunction() {
-			if values[0].Str == "calc" {
-				val := values[0]
-				val.Args = append(val.Args, "height")
-				res, _ := functions.Calc{}.Process(panel, elm, val)
-				height = helpers.NumFromLength(res, host.Window)
-				l.ScaleHeight(height)
+			return nil
+		}
+		pLayout := ui.FirstOnEntity(l.Ui().Entity().Parent).Layout()
+		s := pLayout.PixelSize().Y()
+		s -= pLayout.Padding().Vertical()
+		s -= pLayout.Border().Vertical()
+		finalH := applyHeightConstraints(panel, s*height)
+		l.ScaleHeight(finalH)
+		if c.HasAspectRatio() && c.AspectRatio > 0 {
+			l.ScaleWidth(applyWidthConstraints(panel, finalH*c.AspectRatio))
+		}
+	} else if values[0].IsFunction() {
+		if values[0].Str == "calc" {
+			val := values[0]
+			val.Args = append(val.Args, "height")
+			res, _ := functions.Calc{}.Process(panel, elm, val)
+			height = helpers.NumFromLength(res, host.Window)
+			if c.HasBoxSizing() && !c.UsesBorderBox() {
+				height += l.Padding().Vertical() + l.Border().Vertical()
 			}
-		} else {
-			panel.Base().Layout().ScaleHeight(height)
+			height = applyHeightConstraints(panel, height)
+			l.ScaleHeight(height)
+			if c.HasAspectRatio() && c.AspectRatio > 0 {
+				l.ScaleWidth(applyWidthConstraints(panel, height*c.AspectRatio))
+			}
+		}
+	} else {
+		panel.Base().Layout().ScaleHeight(height)
+		if c.HasAspectRatio() && c.AspectRatio > 0 {
+			l.ScaleWidth(applyWidthConstraints(panel, height*c.AspectRatio))
 		}
 	}
-	return err
+
+	return nil
 }

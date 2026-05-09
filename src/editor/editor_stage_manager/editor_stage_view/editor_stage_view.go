@@ -60,6 +60,7 @@ type StageView struct {
 	camera        editor_controls.EditorCamera
 	gridTransform matrix.Transform
 	gridShader    *shader_data_registry.ShaderDataGrid
+	gridVisible   bool
 	manager       editor_stage_manager.StageManager
 	transformTool transform_tools.TransformTool
 	selectTool    select_tool.SelectTool
@@ -80,11 +81,13 @@ func (v *StageView) Initialize(host *engine.Host, ed EditorStageViewWorkspaceInt
 	defer tracing.NewRegion("StageView.Initialize").End()
 	v.manager.Initialize(host, ed.History(), ed)
 	v.host = host
+	v.gridVisible = ed.Settings().ShowGrid
 	v.manager.NewStage()
 	v.transformTool.Initialize(host, v, ed.History(), &ed.Settings().Snapping)
 	v.transformMan.Initialize(v, ed.History(), &ed.Settings().Snapping)
 	v.selectTool.Init(host, &v.manager)
 	v.createViewportGrid()
+	v.applyGridVisibility()
 	v.setupCamera(ed)
 	// Data binding visualizers
 	weakHost := weak.Make(host)
@@ -98,12 +101,33 @@ func (v *StageView) Initialize(host *engine.Host, ed EditorStageViewWorkspaceInt
 
 func (v *StageView) Open() {
 	defer tracing.NewRegion("StageView.Open").End()
-	v.gridShader.Activate()
+	v.applyGridVisibility()
 }
 
 func (v *StageView) Close() {
 	defer tracing.NewRegion("StageView.Close").End()
 	v.gridShader.Deactivate()
+}
+
+// IsGridVisible returns whether the editor viewport grid is currently shown.
+func (v *StageView) IsGridVisible() bool { return v.gridVisible }
+
+// SetGridVisible toggles the editor viewport grid. The change is applied
+// immediately to the live drawing; persistence is the caller's responsibility.
+func (v *StageView) SetGridVisible(visible bool) {
+	v.gridVisible = visible
+	v.applyGridVisibility()
+}
+
+func (v *StageView) applyGridVisibility() {
+	if v.gridShader == nil {
+		return
+	}
+	if v.gridVisible {
+		v.gridShader.Activate()
+	} else {
+		v.gridShader.Deactivate()
+	}
 }
 
 // Update will update the stage view and return `true` if the view is taking
@@ -192,8 +216,8 @@ func (v *StageView) createViewportGrid() {
 func (v *StageView) setupCamera(ed EditorStageViewWorkspaceInterface) {
 	defer tracing.NewRegion("StageView.setupCamera").End()
 	pjs := &ed.Project().Settings
-	v.camera.OnModeChange.Add(func() {
-		switch v.camera.Mode() {
+	v.camera.OnModeChange.Add(func(mode editor_controls.EditorCameraMode) {
+		switch mode {
 		case editor_controls.EditorCameraMode3d:
 			// Identity matrix is fine
 			v.gridShader.Color.SetA(1)

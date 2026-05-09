@@ -287,7 +287,7 @@ func (w *StageWorkspace) spawnTexture(cc *content_database.CachedContent, point 
 	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
 	// Set the position after generating the BVH
 	e.Transform.SetPosition(point)
-	man.AddBVH(e.StageData.Bvh, &e.Transform)
+	man.AddBVH(e)
 	e.StageData.Description.Textures = []string{cc.Id()}
 	if w.stageView.IsView3D() {
 		e.StageData.ShaderData = &shader_data_registry.ShaderDataStandard{
@@ -303,6 +303,17 @@ func (w *StageWorkspace) spawnTexture(cc *content_database.CachedContent, point 
 	}
 	w.Host.RunOnMainThread(func() {
 		tex.DelayedCreate(w.Host.Window.GpuInstance.PrimaryDevice())
+		if !w.stageView.IsView3D() && tex.Width > 0 && tex.Height > 0 {
+			var w, h matrix.Float = 1, 1
+			tw := matrix.Float(tex.Width)
+			th := matrix.Float(tex.Height)
+			if tex.Width < tex.Height {
+				h = th / tw
+			} else {
+				w = tw / th
+			}
+			e.Transform.SetScale(matrix.NewVec3(w, h, 1))
+		}
 		draw := rendering.Drawing{
 			Material:   mat,
 			Mesh:       e.StageData.Mesh,
@@ -344,10 +355,13 @@ func (w *StageWorkspace) spawnMesh(cc *content_database.CachedContent, point mat
 	e.StageData.Mesh = w.Host.MeshCache().Mesh(cc.Id(), km.Verts, km.Indexes)
 	e.StageData.Description.Mesh = e.StageData.Mesh.Key()
 	e.StageData.Description.Material = mat.Id
-	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
-	// Set the position after generating the BVH
 	e.Transform.SetPosition(point)
-	man.AddBVH(e.StageData.Bvh, &e.Transform)
+	missingBVH := km.BVH == nil
+	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
+	if missingBVH {
+		content_database.SaveMeshBVHInBackground(km, path, w.ed.ProjectFileSystem(), cc.Id())
+	}
+	man.AddBVH(e)
 	man.RefitBVH(e)
 	e.StageData.ShaderData = &shader_data_registry.ShaderDataStandard{
 		ShaderDataBase: rendering.NewShaderDataBase(),

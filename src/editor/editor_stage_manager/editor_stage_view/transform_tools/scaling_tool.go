@@ -37,6 +37,7 @@
 package transform_tools
 
 import (
+	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
 	"kaijuengine.com/engine/collision"
@@ -53,16 +54,12 @@ const (
 )
 
 type ScalingTool struct {
-	root        matrix.Transform
+	TransformGizmo
 	boxes       [3]ScalingToolBox
-	lastCamPos  matrix.Vec3
 	startScale  matrix.Vec3
 	OnDragStart events.EventWithArg[matrix.Vec3]
 	OnDragScale events.EventWithArg[matrix.Vec3]
 	OnDragEnd   events.EventWithArg[matrix.Vec3]
-	currentAxis int
-	dragging    bool
-	visible     bool
 }
 
 type ScalingToolBox struct {
@@ -135,7 +132,11 @@ func (a *ScalingToolBox) Initialize(host *engine.Host, vec int) {
 func (t *ScalingTool) Show(pos matrix.Vec3) {
 	t.visible = true
 	t.root.SetPosition(pos)
-	for i := range t.boxes {
+	axis := len(t.boxes)
+	if t.cameraMode == editor_controls.EditorCameraMode2d {
+		axis = 2
+	}
+	for i := range axis {
 		t.boxes[i].shaftShaderData.Activate()
 		t.boxes[i].boxShaderData.Activate()
 	}
@@ -163,28 +164,23 @@ func (t *ScalingTool) Update(host *engine.Host, snap bool, snapScale float32) bo
 	return t.dragging
 }
 
+func (t *ScalingTool) SetDimensions(mode editor_controls.EditorCameraMode) {
+	t.cameraMode = mode
+	if t.visible {
+		t.Hide()
+		t.Show(t.root.Position())
+	}
+}
+
 func (t *ScalingTool) resize(cam cameras.Camera) {
-	camPos := cam.Position()
-	if camPos.Equals(t.lastCamPos) {
-		return
-	}
-	t.lastCamPos = camPos
-	viewMat := cam.View()
-	gizmoPos := t.root.Position().AsVec4()
-	viewPos := matrix.Mat4MultiplyVec4(viewMat, gizmoPos)
-	dist := matrix.Abs(viewPos.Z())
-	if dist <= matrix.FloatSmallestNonzero {
-		return
-	}
-	gizmoScale := dist * translationGizmoScale
-	t.root.SetScale(matrix.NewVec3(gizmoScale, gizmoScale, gizmoScale))
+	t.TransformGizmo.resize(cam)
 	t.updateHitBoxes()
 }
 
 func (t *ScalingTool) updateHitBoxes() {
 	scale := t.root.Scale().LargestAxis()
 	arrowLen := translationGizmoTotalHeight * scale * 0.5
-	r := matrix.Float(translationGizmoTotalRadius)
+	r := matrix.Float(translationGizmoTotalRadius) * scale
 	for i := range t.boxes {
 		t.boxes[i].hitBox = collision.AABB{
 			Center: t.root.Position(),
@@ -204,11 +200,19 @@ func (t *ScalingTool) updateHitBoxes() {
 	}
 }
 
+func (t *ScalingTool) mousePosition(c *hid.Cursor) matrix.Vec2 {
+	if t.cameraMode == editor_controls.EditorCameraMode2d {
+		return c.ScreenPosition()
+	} else {
+		return c.Position()
+	}
+}
+
 func (t *ScalingTool) hitCheck(host *engine.Host, cam cameras.Camera) {
 	if t.dragging {
 		return
 	}
-	ray := cam.RayCast(host.Window.Cursor.Position())
+	ray := cam.RayCast(t.mousePosition(&host.Window.Cursor))
 	dist := matrix.FloatMax
 	target := -1
 	for i := range t.boxes {
@@ -304,7 +308,7 @@ func (t *ScalingTool) procRayOnAxis(c *hid.Cursor, cam cameras.Camera, snap bool
 		cp.SetZ(dragPos.Z())
 	}
 	nml := cp.Subtract(dragPos)
-	if hit, ok := cam.TryPlaneHit(c.Position(), dragPos, nml); ok {
+	if hit, ok := cam.TryPlaneHit(t.mousePosition(c), dragPos, nml); ok {
 		scale := matrix.Vec3Zero()
 		if snap {
 			hit.SetX(matrix.Floor(hit.X()/snapScale) * snapScale)

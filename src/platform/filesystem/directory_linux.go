@@ -90,6 +90,12 @@ func openFileBrowserCommand(path string) *exec.Cmd {
 	return exec.Command("xdg-open", path)
 }
 
+func openFileBrowserSelectCommand(path string) *exec.Cmd {
+	// Most Linux file managers don't provide a reliable cross-desktop "select file"
+	// interface via xdg-open -> open the containing directory
+	return exec.Command("xdg-open", filepath.Dir(path))
+}
+
 func openFileDialogWindow(startPath string, extensions []DialogExtension, ok func(path string), cancel func(), windowHandle unsafe.Pointer) error {
 	// TODO:  Eventually we'll create our own fully working file browser, instead of using current temp one
 	klib.NotYetImplemented(-1)

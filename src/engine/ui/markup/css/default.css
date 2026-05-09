@@ -86,7 +86,6 @@ dfn {
 }
 div {
 	display: block;
-	width: 100%;
 }
 dl {
 	display: block;
@@ -397,7 +396,7 @@ ul {
 	padding-left: 40px;
 }
 var {
-	font-style: italic; 
+	font-style: italic;
 }
 button, .button {
 	padding: 2px 5px 2px 5px;
@@ -418,7 +417,6 @@ button:hover, .button:hover {
 	background-position: 0 64px; */
 }
 button:active, .button:active {
-	padding: 4px 5px 0px 5px;
 	background-color: rgb(59, 59, 59);
 	/* background-image: url("input_atlas.png");
 	background-position: 64px 0; */

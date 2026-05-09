@@ -48,12 +48,11 @@ import (
 )
 
 func (p BorderImageSlice) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	width := float32(0)
 	if len(values) != 1 {
 		return fmt.Errorf("expected exactly 1 value but got %d", len(values))
-	} else {
-		width = helpers.NumFromLength(values[0].Str, host.Window)
-		panel.Base().ShaderData().BorderLen = matrix.NewVec2(width, width)
 	}
+
+	width := helpers.NumFromLength(values[0].Str, host.Window)
+	panel.Base().ShaderData().BorderLen = matrix.NewVec2(width, width)
 	return nil
 }

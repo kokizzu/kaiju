@@ -54,7 +54,22 @@ var (
 		"visibility": {},
 		"display":    {},
 	}
+	panelOnlyProperties = map[string]struct{}{
+		"width":        {},
+		"height":       {},
+		"min-width":    {},
+		"max-width":    {},
+		"min-height":   {},
+		"max-height":   {},
+		"aspect-ratio": {},
+		"box-sizing":   {},
+	}
 )
+
+func isPanelOnlyProperty(property string) bool {
+	_, ok := panelOnlyProperties[property]
+	return ok
+}
 
 type CSSProperty interface {
 	Key() string
@@ -237,7 +252,11 @@ func (s *ElementLayoutStylizer) processRules(layout *ui.Layout) []error {
 		}
 	}
 	slices.SortFunc(all, func(x, y rules.Rule) int { return x.Sort - y.Sort })
+	isLabel := layout.Ui().IsType(ui.ElementTypeLabel)
 	for i := range all {
+		if isLabel && isPanelOnlyProperty(all[i].Property) {
+			continue
+		}
 		if p, ok := LinkedPropertyMap[all[i].Property]; ok {
 			if err := p.Process(layout.Ui().ToPanel(), elm, all[i].Values, host); err != nil {
 				problems = append(problems, err)

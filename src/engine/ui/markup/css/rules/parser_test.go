@@ -50,6 +50,8 @@ const testCSSVarInCalc = `:root { --ed-menu-bar-height: 24px; }
 type dummyWindow struct{}
 
 func (dummyWindow) DotsPerMillimeter() float64 { return 1 }
+func (dummyWindow) Width() int                 { return 0 }
+func (dummyWindow) Height() int                { return 0 }
 
 func TestParseNarrowTag(t *testing.T) {
 	s := NewStyleSheet()

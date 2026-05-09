@@ -48,6 +48,7 @@ import (
 
 	"kaijuengine.com/debug"
 	"kaijuengine.com/engine"
+	"kaijuengine.com/engine/assets"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/engine/ui"
 	"kaijuengine.com/engine/ui/markup/css/rules"
@@ -83,6 +84,35 @@ var funcMap = template.FuncMap{
 		}
 		return out
 	},
+}
+
+type htmlInputType int
+
+const (
+	htmlInputTypeText htmlInputType = iota
+	htmlInputTypeCheckbox
+	htmlInputTypeSlider
+	htmlInputTypeNumber
+	htmlInputTypePhone
+	htmlInputTypeDatetime
+)
+
+func classifyHTMLInputType(rawType string) htmlInputType {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case "checkbox":
+		return htmlInputTypeCheckbox
+	case "slider", "range":
+		return htmlInputTypeSlider
+	case "number":
+		return htmlInputTypeNumber
+	case "tel":
+		return htmlInputTypePhone
+	case "datetime", "datetime-local", "date", "time":
+		return htmlInputTypeDatetime
+	default:
+		// unknown input types default to text
+		return htmlInputTypeText
+	}
 }
 
 type Document struct {
@@ -290,9 +320,10 @@ func (d *Document) createUIElement(uiMan *ui.Manager, e *Element, parent *ui.Pan
 			} else {
 				tex, err = host.TextureCache().Texture(src, rendering.TextureFilterLinear)
 			}
+			missing := err != nil
 			if err != nil {
 				slog.Error(err.Error())
-				return
+				tex, _ = host.TextureCache().Texture(assets.TextureSquare, rendering.TextureFilterLinear)
 			}
 			img := panel.Base().ToImage()
 			if strings.HasSuffix(src, ".gif") {
@@ -302,27 +333,14 @@ func (d *Document) createUIElement(uiMan *ui.Manager, e *Element, parent *ui.Pan
 				img.Init(tex)
 			}
 			panel = (*ui.Panel)(img)
+			if missing {
+				panel.SetColor(matrix.ColorMagenta())
+			}
 		} else if e.IsInput() {
-			inputType := e.Attribute("type")
-			switch inputType {
-			case "checkbox":
-				cb := panel.Base().ToCheckbox()
-				cb.Init()
-				if e.Attribute("checked") != "" {
-					cb.SetCheckedWithoutEvent(true)
-				}
-			case "slider":
-				slider := panel.Base().ToSlider()
-				slider.Init()
-				panel.DontFitContent()
-				if a := e.Attribute("value"); a != "" {
-					if f, err := strconv.ParseFloat(a, 32); err == nil {
-						slider.SetValueWithoutEvent(float32(f))
-					}
-				}
-			case "text", "number":
+			initTextInput := func(inputType ui.InputType) {
 				input := panel.Base().ToInput()
 				input.Init(e.Attribute("placeholder"))
+				input.SetType(inputType)
 				input.SetTextWithoutEvent(e.Attribute("value"))
 				if d.firstInput == nil {
 					d.firstInput = input
@@ -332,6 +350,31 @@ func (d *Document) createUIElement(uiMan *ui.Manager, e *Element, parent *ui.Pan
 				}
 				d.lastInput = input
 				input.SetNextFocusedInput(d.firstInput)
+			}
+			switch classifyHTMLInputType(e.Attribute("type")) {
+			case htmlInputTypeCheckbox:
+				cb := panel.Base().ToCheckbox()
+				cb.Init()
+				if e.Attribute("checked") != "" {
+					cb.SetCheckedWithoutEvent(true)
+				}
+			case htmlInputTypeSlider:
+				slider := panel.Base().ToSlider()
+				slider.Init()
+				panel.DontFitContent()
+				if a := e.Attribute("value"); a != "" {
+					if f, err := strconv.ParseFloat(a, 32); err == nil {
+						slider.SetValueWithoutEvent(float32(f))
+					}
+				}
+			case htmlInputTypeNumber:
+				initTextInput(ui.InputTypeNumber)
+			case htmlInputTypePhone:
+				initTextInput(ui.InputTypePhone)
+			case htmlInputTypeDatetime:
+				initTextInput(ui.InputTypeDatetime)
+			default:
+				initTextInput(ui.InputTypeText)
 			}
 			panel.SetOverflow(ui.OverflowVisible)
 		} else if e.IsSelect() {

@@ -329,6 +329,7 @@ func (k *Keyboard) SetToggleKeyState(key KeyboardKey, state KeyState) {
 
 func (k *Keyboard) KeyToRune(key KeyboardKey) rune {
 	c := ""
+	isNumpadKey := false
 	switch key {
 	case KeyboardKeyA:
 		c = "a"
@@ -428,56 +429,49 @@ func (k *Keyboard) KeyToRune(key KeyboardKey) rune {
 	case KeyboardKey9:
 		c = "9"
 	case KeyboardNumKey0:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "0"
-		}
+		isNumpadKey = true
+		c = "0"
 	case KeyboardNumKey1:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "1"
-		}
+		isNumpadKey = true
+		c = "1"
 	case KeyboardNumKey2:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "2"
-		}
+		isNumpadKey = true
+		c = "2"
 	case KeyboardNumKey3:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "3"
-		}
+		isNumpadKey = true
+		c = "3"
 	case KeyboardNumKey4:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "4"
-		}
+		isNumpadKey = true
+		c = "4"
 	case KeyboardNumKey5:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "5"
-		}
+		isNumpadKey = true
+		c = "5"
 	case KeyboardNumKey6:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "6"
-		}
+		isNumpadKey = true
+		c = "6"
 	case KeyboardNumKey7:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "7"
-		}
+		isNumpadKey = true
+		c = "7"
 	case KeyboardNumKey8:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "8"
-		}
+		isNumpadKey = true
+		c = "8"
 	case KeyboardNumKey9:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "9"
-		}
+		isNumpadKey = true
+		c = "9"
 	case KeyboardNumKeyMultiply:
+		isNumpadKey = true
 		c = "*"
 	case KeyboardNumKeyAdd:
+		isNumpadKey = true
 		c = "+"
 	case KeyboardNumKeySubtract:
+		isNumpadKey = true
 		c = "-"
 	case KeyboardNumKeyPeriod:
-		if k.IsToggleKeyOn(KeyboardKeyNumLock) {
-			c = "."
-		}
+		isNumpadKey = true
+		c = "."
 	case KeyboardNumKeyDivide:
+		isNumpadKey = true
 		c = "/"
 	default:
 		c = ""
@@ -485,7 +479,7 @@ func (k *Keyboard) KeyToRune(key KeyboardKey) rune {
 	f := '\000'
 	if c != "" {
 		f = rune(c[0])
-		if k.HasShift() {
+		if k.HasShift() && !isNumpadKey {
 			switch f {
 			case '1':
 				f = '!'

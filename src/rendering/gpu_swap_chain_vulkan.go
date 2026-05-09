@@ -65,6 +65,12 @@ func (g *GPUSwapChain) setupImpl(window RenderingContainer, inst *GPUApplication
 	if capabilities.MaxImageCount > 0 && imgCount > capabilities.MaxImageCount {
 		imgCount = capabilities.MaxImageCount
 	}
+	imageUsage := GPUImageUsageColorAttachmentBit | GPUImageUsageTransferDstBit
+	if capabilities.SupportedUsageFlags&GPUImageUsageTransferSrcBit != 0 {
+		imageUsage |= GPUImageUsageTransferSrcBit
+	} else {
+		slog.Warn("swap chain does not support transfer source usage; screenshots from the presented image will not be available")
+	}
 	vkSurface := vk.Surface(inst.Surface.handle)
 	info := vk.SwapchainCreateInfo{
 		SType:            vulkan_const.StructureTypeSwapchainCreateInfo,
@@ -73,7 +79,7 @@ func (g *GPUSwapChain) setupImpl(window RenderingContainer, inst *GPUApplication
 		ImageFormat:      gpuFormatToVulkan[surfaceFormat.Format],
 		ImageColorSpace:  vkColorSpace(surfaceFormat),
 		ImageArrayLayers: 1,
-		ImageUsage:       vk.ImageUsageFlags(vulkan_const.ImageUsageColorAttachmentBit | vulkan_const.ImageUsageTransferDstBit),
+		ImageUsage:       imageUsage.toVulkan(),
 		CompositeAlpha:   compositeAlpha,
 		PresentMode:      gpuPresentModeToVulkan[presentMode],
 		Clipped:          vulkan_const.True,

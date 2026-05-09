@@ -53,7 +53,7 @@ func setChildTextBackgroundColor(elm *document.Element, color matrix.Color) {
 	for _, c := range elm.Children {
 		if c.IsText() {
 			c.UI.ToLabel().SetBGColor(color)
-		} else if c.UI.ToPanel().Background() == nil { // Only continue if transparent
+		} else if !c.UI.IsType(ui.ElementTypeLabel) && c.UI.ToPanel().Background() == nil { // Only continue if transparent
 			setChildTextBackgroundColor(c, color)
 		}
 	}
@@ -63,13 +63,27 @@ func (p BackgroundColor) Process(panel *ui.Panel, elm *document.Element, values 
 	if len(values) != 1 {
 		return fmt.Errorf("Expected exactly 1 value but got %d", len(values))
 	}
+
+	isLabel := elm.UI.IsType(ui.ElementTypeLabel)
 	// Images used for background are not colored
-	bg := elm.UI.ToPanel().Background()
-	applyPanelColor := bg == nil || bg.Key == assets.TextureSquare
-	var err error
-	var color matrix.Color
+	applyPanelColor := false
+	if !isLabel {
+		bg := elm.UI.ToPanel().Background()
+		applyPanelColor = bg == nil || bg.Key == assets.TextureSquare
+	}
+
 	hex := values[0].Str
 	if hex == "inherit" {
+		if isLabel {
+			pBase := panel.Base()
+			elm.UI.AddEvent(ui.EventTypeRender, func() {
+				if pBase.Entity().Parent != nil {
+					p := ui.FirstPanelOnEntity(pBase.Entity().Parent)
+					elm.UI.ToLabel().SetBGColor(p.Base().ShaderData().FgColor)
+				}
+			})
+			return nil
+		}
 		if applyPanelColor {
 			pBase := panel.Base()
 			pBase.AddEvent(ui.EventTypeRender, func() {
@@ -80,28 +94,35 @@ func (p BackgroundColor) Process(panel *ui.Panel, elm *document.Element, values 
 			})
 		}
 		return nil
-	} else {
-		switch values[0].Str {
-		case "rgb":
-			hex, _ = functions.Rgb{}.Process(panel, elm, values[0])
-		case "rgba":
-			hex, _ = functions.Rgba{}.Process(panel, elm, values[0])
-		}
-		if newHex, ok := helpers.ColorMap[hex]; ok {
-			hex = newHex
-		}
-		if color, err = matrix.ColorFromHexString(hex); err == nil {
-			if applyPanelColor || panel.Base().Type() == ui.ElementTypeImage {
-				panel.SetColor(color)
-			}
-			if panel.Base().IsType(ui.ElementTypeInput) {
-				panel.Base().ToInput().SetBGColor(color)
-			} else if !panel.HasEnforcedColor() {
-				setChildTextBackgroundColor(elm, color)
-			}
-			return nil
-		} else {
-			return err
-		}
 	}
+
+	switch values[0].Str {
+	case "rgb":
+		hex, _ = functions.Rgb{}.Process(panel, elm, values[0])
+	case "rgba":
+		hex, _ = functions.Rgba{}.Process(panel, elm, values[0])
+	}
+
+	if newHex, ok := helpers.ColorMap[hex]; ok {
+		hex = newHex
+	}
+
+	color, err := matrix.ColorFromHexString(hex)
+	if err != nil {
+		return err
+	}
+
+	if isLabel {
+		elm.UI.ToLabel().SetBGColor(color)
+		return nil
+	}
+	if applyPanelColor || panel.Base().Type() == ui.ElementTypeImage {
+		panel.SetColor(color)
+	}
+	if panel.Base().IsType(ui.ElementTypeInput) {
+		panel.Base().ToInput().SetBGColor(color)
+	} else if !panel.HasEnforcedColor() {
+		setChildTextBackgroundColor(elm, color)
+	}
+	return nil
 }

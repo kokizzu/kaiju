@@ -51,33 +51,34 @@ import (
 func (p BorderRightColor) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	if len(values) != 1 {
 		return errors.New("BorderLeftColor requires 1 value")
-	} else {
-		if values[0].Str == "transparent" {
-			colors := panel.BorderColor()
-			panel.SetBorderColor(colors[0], colors[1], matrix.ColorTransparent(), colors[3])
-			return nil
-		} else if values[0].Str == "initial" {
-			colors := panel.BorderColor()
-			panel.SetBorderColor(colors[0], colors[1], matrix.ColorWhite(), colors[3])
-			return nil
-		} else if values[0].Str == "inherit" {
-			if elm.Parent.Value() != nil {
-				colors := elm.Parent.Value().UI.ToPanel().BorderColor()
-				panel.SetBorderColor(colors[0], colors[1], colors[2], colors[3])
-			}
-			return nil
-		} else {
-			hex := values[0].Str
-			if newHex, ok := helpers.ColorMap[hex]; ok {
-				hex = newHex
-			}
-			color, err := matrix.ColorFromHexString(hex)
-			if err != nil {
-				return err
-			}
-			colors := panel.BorderColor()
-			panel.SetBorderColor(colors[0], colors[1], color, colors[3])
-			return nil
-		}
 	}
+
+	value := values[0].Str
+	switch value {
+	case "transparent":
+		colors := panel.BorderColor()
+		panel.SetBorderColor(colors[0], colors[1], matrix.ColorTransparent(), colors[3])
+		return nil
+	case "initial":
+		colors := panel.BorderColor()
+		panel.SetBorderColor(colors[0], colors[1], matrix.ColorWhite(), colors[3])
+		return nil
+	case "inherit":
+		if elm.Parent.Value() != nil {
+			colors := elm.Parent.Value().UI.ToPanel().BorderColor()
+			panel.SetBorderColor(colors[0], colors[1], colors[2], colors[3])
+		}
+		return nil
+	}
+
+	if newHex, ok := helpers.ColorMap[value]; ok {
+		value = newHex
+	}
+	color, err := matrix.ColorFromHexString(value)
+	if err != nil {
+		return err
+	}
+	colors := panel.BorderColor()
+	panel.SetBorderColor(colors[0], colors[1], color, colors[3])
+	return nil
 }

@@ -105,10 +105,11 @@ type Joint struct {
 }
 
 type Result struct {
-	Nodes      []Node
-	Meshes     []Mesh
-	Animations []Animation
-	Joints     []Joint
+	Nodes        []Node
+	Meshes       []Mesh
+	Animations   []Animation
+	Joints       []Joint
+	TextureBytes map[string][]byte
 }
 
 func (r *Result) IsTreeAnimated(nodeIdx int) bool {

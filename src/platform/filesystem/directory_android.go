@@ -82,6 +82,10 @@ func openFileBrowserCommand(path string) *exec.Cmd {
 	return nil
 }
 
+func openFileBrowserSelectCommand(path string) *exec.Cmd {
+	return openFileBrowserCommand(path)
+}
+
 func openFileDialogWindow(startPath string, extensions []DialogExtension, ok func(path string), cancel func(), windowHandle unsafe.Pointer) error {
 	// TODO:  Eventually we'll create our own fully working file browser, instead of using current temp one
 	klib.NotYetImplemented(-1)

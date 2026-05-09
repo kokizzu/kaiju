@@ -59,6 +59,7 @@ func (p WordWrap) Process(panel *ui.Panel, elm *document.Element, values []rules
 	if len(values) != 1 {
 		return errors.New("WordWrap requires a single value")
 	}
+
 	switch values[0].Str {
 	case "normal":
 		setChildTextWordWrap(elm, true)
@@ -72,5 +73,6 @@ func (p WordWrap) Process(panel *ui.Panel, elm *document.Element, values []rules
 	default:
 		return errors.New("WordWrap does not currently support " + values[0].Str)
 	}
+
 	return nil
 }

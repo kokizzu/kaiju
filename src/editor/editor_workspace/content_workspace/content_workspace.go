@@ -46,6 +46,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"weak"
 
 	"kaijuengine.com/editor/editor_events"
@@ -60,6 +61,7 @@ import (
 	"kaijuengine.com/engine/ui/markup/document"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
+	"kaijuengine.com/platform/filesystem"
 	"kaijuengine.com/platform/profiler/tracing"
 	"kaijuengine.com/rendering"
 )
@@ -208,29 +210,79 @@ func (w *ContentWorkspace) clickImport(*document.Element) {
 		MultiSelect:  true,
 		OnConfirm: func(paths []string) {
 			w.UiMan.EnableUpdate()
-			index := []string{}
-			for i := range paths {
-				res, err := content_database.Import(paths[i], w.pfs, w.cache, "")
-				for j := range res {
-					if err != nil {
-						slog.Error("failed to import content", "path", paths[i], "error", err)
-					} else {
-						var addDependencies func(target *content_database.ImportResult)
-						addDependencies = func(target *content_database.ImportResult) {
-							index = klib.AppendUnique(index, target.Id)
-							for k := range target.Dependencies {
-								addDependencies(&target.Dependencies[k])
-							}
-						}
-						addDependencies(&res[j])
-					}
-				}
-			}
-			w.editor.Events().OnContentAdded.Execute(index)
+			w.importPaths(paths)
 		}, OnCancel: func() {
 			w.UiMan.EnableUpdate()
 		},
 	})
+}
+
+func (w *ContentWorkspace) importPaths(paths []string) {
+	defer tracing.NewRegion("ContentWorkspace.importPaths").End()
+	index := ImportPaths(paths, w.pfs, w.cache)
+	if len(index) == 0 {
+		return
+	}
+	w.editor.Events().OnContentAdded.Execute(index)
+}
+
+// ImportPaths is shared by the content workspace and global file-drop routing.
+func ImportPaths(paths []string, pfs *project_file_system.FileSystem, cache *content_database.Cache) []string {
+	defer tracing.NewRegion("ContentWorkspace.ImportPaths").End()
+	index := []string{}
+	importPaths := make([]string, 0, len(paths))
+	for i := range paths {
+		info, err := os.Stat(paths[i])
+		if err != nil {
+			slog.Error("failed to stat import path", "path", paths[i], "error", err)
+			continue
+		}
+		if !info.IsDir() {
+			importPaths = klib.AppendUnique(importPaths, paths[i])
+			continue
+		}
+		if err = filepath.WalkDir(paths[i], func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				slog.Warn("failed while walking dropped folder", "path", path, "error", walkErr)
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			importPaths = klib.AppendUnique(importPaths, path)
+			return nil
+		}); err != nil {
+			slog.Warn("failed to walk dropped folder", "path", paths[i], "error", err)
+		}
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(importPaths))
+	for i := range importPaths {
+		// goroutine
+		go func() {
+			defer wg.Done()
+			res, err := content_database.Import(importPaths[i], pfs, cache, "")
+			if err != nil {
+				slog.Error("failed to import content", "path", importPaths[i], "error", err)
+				return
+			}
+			for j := range res {
+				var addDependencies func(target *content_database.ImportResult)
+				addDependencies = func(target *content_database.ImportResult) {
+					index = klib.AppendUnique(index, target.Id)
+					for k := range target.Dependencies {
+						addDependencies(&target.Dependencies[k])
+					}
+				}
+				addDependencies(&res[j])
+			}
+		}()
+	}
+	wg.Wait()
+	if len(index) == 0 {
+		slog.Warn("paths did not produce importable content", "paths", paths)
+	}
+	return index
 }
 
 func (w *ContentWorkspace) toggleListView(e *document.Element) {
@@ -672,6 +724,10 @@ func (w *ContentWorkspace) completeDeleteOfSelectedContent() {
 
 func (w *ContentWorkspace) entryMouseEnter(e *document.Element) {
 	defer tracing.NewRegion("ContentWorkspace.entryMouseEnter").End()
+	if context_menu.IsOpen() {
+		w.tooltip.UI.Hide()
+		return
+	}
 	ui := w.tooltip.UI
 	id := e.Attribute("id")
 	cc, err := w.cache.Read(id)
@@ -691,6 +747,10 @@ func (w *ContentWorkspace) entryMouseEnter(e *document.Element) {
 
 func (w *ContentWorkspace) entryMouseMove(e *document.Element) {
 	defer tracing.NewRegion("ContentWorkspace.entryMouseMove").End()
+	if context_menu.IsOpen() {
+		w.tooltip.UI.Hide()
+		return
+	}
 	ui := w.tooltip.UI
 	if !ui.Entity().IsActive() {
 		ui.Show()
@@ -759,9 +819,15 @@ func (w *ContentWorkspace) rightClickContent(e *document.Element) {
 				},
 			})
 		}
+		options = append(options, context_menu.ContextMenuOption{
+			Label: "Open file in explorer",
+			Call: func() {
+				w.openInExplorer(cc)
+			},
+		})
 	}
-	w.editor.BlurInterface()
-	context_menu.Show(w.Host, options, w.Host.Window.Cursor.ScreenPosition(), w.editor.FocusInterface)
+
+	context_menu.Show(w.Host, options, w.Host.Window.Cursor.ScreenPosition(), nil)
 }
 
 func (w *ContentWorkspace) clickClearSelection(e *document.Element) {
@@ -901,7 +967,7 @@ func openContentEditor(contentEditor, path string) {
 
 func (w *ContentWorkspace) openInEditor(cc content_database.CachedContent) {
 	ed := ""
-	path := w.pfs.FullPath(cc.ContentPath())
+	path, ok := w.contentSourcePath(cc)
 	switch cc.Config.Type {
 	case content_database.Html{}.TypeName():
 		fallthrough
@@ -909,13 +975,6 @@ func (w *ContentWorkspace) openInEditor(cc content_database.CachedContent) {
 		ed = w.editor.Settings().CodeEditor
 	case content_database.Mesh{}.TypeName():
 		ed = w.editor.Settings().MeshEditor
-		if _, err := w.pfs.Stat(cc.Config.SrcPath); err == nil {
-			path = w.pfs.FullPath(cc.Config.SrcPath)
-		} else if _, err := os.Stat(cc.Config.SrcPath); err == nil {
-			path = cc.Config.SrcPath
-		} else {
-			path = ""
-		}
 	case content_database.Music{}.TypeName():
 		fallthrough
 	case content_database.Sound{}.TypeName():
@@ -944,13 +1003,43 @@ func (w *ContentWorkspace) openInEditor(cc content_database.CachedContent) {
 	case content_database.Spv{}.TypeName():
 	case content_database.Template{}.TypeName():
 	}
-	if path == "" {
+	if !ok {
 		slog.Warn("could not find the source file path for the selected content")
 	} else if ed == "" {
 		slog.Warn("currently there isn't an editor that can open the content", "type", cc.Config.Type)
 	} else {
 		openContentEditor(ed, path)
 	}
+}
+
+func (w *ContentWorkspace) openInExplorer(cc content_database.CachedContent) {
+	path, ok := w.contentSourcePath(cc)
+	if !ok {
+		slog.Warn("could not find the source file path for the selected content")
+		return
+	}
+	if err := filesystem.OpenFileBrowserToItem(path); err != nil {
+		slog.Error("failed to open explorer for the selected content", "path", path, "error", err)
+	}
+}
+
+func (w *ContentWorkspace) contentSourcePath(cc content_database.CachedContent) (string, bool) {
+	path := w.pfs.FullPath(cc.ContentPath())
+	if _, err := w.pfs.Stat(cc.ContentPath()); err == nil {
+		return path, true
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, true
+	}
+	if cc.Config.SrcPath != "" {
+		if _, err := w.pfs.Stat(cc.Config.SrcPath); err == nil {
+			return w.pfs.FullPath(cc.Config.SrcPath), true
+		}
+		if _, err := os.Stat(cc.Config.SrcPath); err == nil {
+			return cc.Config.SrcPath, true
+		}
+	}
+	return "", false
 }
 
 func (w *ContentWorkspace) updateFtde(deltaTime float64) {

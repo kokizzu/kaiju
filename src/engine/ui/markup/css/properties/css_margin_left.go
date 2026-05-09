@@ -53,10 +53,10 @@ func (MarginLeft) Preprocess(values []rules.PropertyValue, rules []rules.Rule) (
 func (MarginLeft) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	if len(values) != 1 {
 		return errors.New("MarginLeft requires exactly 1 value")
-	} else {
-		current := panel.Base().Layout().Margin()
-		size := marginSizeFromStr(values[0].Str, host.Window)
-		panel.Base().Layout().SetMargin(size, current.Y(), current.Z(), current.W())
-		return nil
 	}
+
+	current := panel.Base().Layout().Margin()
+	size := marginSizeFromStr(values[0].Str, host.Window)
+	panel.Base().Layout().SetMargin(size, current.Y(), current.Z(), current.W())
+	return nil
 }

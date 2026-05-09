@@ -53,7 +53,7 @@ func (g *GPUDevice) GenerateMipMaps(texId *TextureId, imageFormat GPUFormat, tex
 
 func (g *GPUDevice) TextureRead(texture *Texture) ([]byte, error) {
 	defer tracing.NewRegion("GPUDevice.TextureRead").End()
-	return g.textureReadImpl(texture)
+	return g.textureReadImpl(&texture.RenderId)
 }
 
 func (g *GPUDevice) TextureReadPixel(texture *Texture, x, y int) matrix.Color {

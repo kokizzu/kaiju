@@ -51,6 +51,7 @@ func (p TextAlign) Process(panel *ui.Panel, elm *document.Element, values []rule
 	if len(values) != 1 {
 		return fmt.Errorf("expected exactly 1 value but got %d", len(values))
 	}
+
 	labels := childLabels(elm)
 	switch values[0].Str {
 	case "left":
@@ -70,5 +71,6 @@ func (p TextAlign) Process(panel *ui.Panel, elm *document.Element, values []rule
 	case "initial":
 	case "inherit":
 	}
+
 	return nil
 }

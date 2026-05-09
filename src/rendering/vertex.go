@@ -56,7 +56,10 @@ func VertexFaceNormal(verts [3]Vertex) matrix.Vec3 {
 	v1 := verts[1].Position
 	v2 := verts[2].Position
 	e0 := v1.Subtract(v0)
-	e1 := v2.Subtract(v2)
-	c := matrix.Vec3Cross(e1, e0)
+	e1 := v2.Subtract(v0)
+	c := matrix.Vec3Cross(e0, e1)
+	if c.IsZero() {
+		return matrix.Vec3Zero()
+	}
 	return c.Normal()
 }

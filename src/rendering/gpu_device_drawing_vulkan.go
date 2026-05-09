@@ -88,7 +88,16 @@ func (g *GPUDevice) drawImpl(renderPass *RenderPass, drawings []ShaderDraw, ligh
 		Width:  uint32(w),
 		Height: uint32(h),
 	}
-	renderPass.beginNextSubpass(g.Painter.currentFrame, ext, renderPass.construction.ImageClears)
+	clears := make([]vk.ClearValue, len(renderPass.construction.ImageClears))
+	for i := range renderPass.construction.ImageClears {
+		c := &renderPass.construction.ImageClears[i]
+		if c.IsDepth {
+			clears[i].SetDepthStencil(c.Depth, c.Stencil)
+		} else {
+			clears[i].SetColor([]float32{c.R, c.G, c.B, c.A})
+		}
+	}
+	renderPass.beginNextSubpass(g.Painter.currentFrame, ext, clears)
 	for i := range drawings {
 		d := &drawings[i]
 		if doDrawings[i] {
@@ -101,7 +110,7 @@ func (g *GPUDevice) drawImpl(renderPass *RenderPass, drawings []ShaderDraw, ligh
 	renderPass.ExecuteSecondaryCommands()
 	for i := range renderPass.subpasses {
 		s := &renderPass.subpasses[i]
-		renderPass.beginNextSubpass(g.Painter.currentFrame, ext, renderPass.construction.ImageClears)
+		renderPass.beginNextSubpass(g.Painter.currentFrame, ext, clears)
 		cmd := &s.cmd[g.Painter.currentFrame]
 		vk.CmdBindPipeline(cmd.buffer, vulkan_const.PipelineBindPointGraphics,
 			vk.Pipeline(s.shader.RenderId.graphicsPipeline.handle))
@@ -264,7 +273,7 @@ func writePushConstants(s *Shader, cmd vk.CommandBuffer, layout vk.PipelineLayou
 		return
 	}
 	vk.CmdPushConstants(cmd, layout,
-		s.pipelineInfo.PushConstant.StageFlags, 0,
+		s.pipelineInfo.PushConstant.StageFlags.toVulkan(), 0,
 		s.pipelineInfo.PushConstant.Size, pushConstantData)
 }
 

@@ -290,9 +290,7 @@ func (dui *WorkspaceDetailsUI) applyTransform(kind transformKind, axis int, v fl
 			s.Transform.SetScale(cur)
 		}
 		tformHistory.nextValues = append(tformHistory.nextValues, cur)
-		// TODO:  Should be refitting the BVH of each, but since the current
-		// refit just does the world anyway, we're skipping for now to do the
-		// world at the end.
+		man.RefitBVH(s)
 		for _, db := range s.DataBindings() {
 			data_binding_renderer.Updated(db, weak.Make(dui.workspace.Value().Host), s)
 		}
@@ -303,7 +301,6 @@ func (dui *WorkspaceDetailsUI) applyTransform(kind transformKind, axis int, v fl
 			tformHistory.prevValues = t.prevValues
 		}
 	}
-	man.RefitWorldBVH()
 	history.AddOrReplaceLast(tformHistory)
 }
 

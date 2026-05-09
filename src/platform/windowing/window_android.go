@@ -113,6 +113,10 @@ func (w *Window) clipboardContents() string {
 
 func (w *Window) invalidateMonitorCache() {}
 
+func (w *Window) monitorCount() int {
+	return 1
+}
+
 func (w *Window) dotsPerMillimeter() float64 {
 	wmm, hmm, err := w.screenSizeMM()
 	if err != nil || wmm == 0 || hmm == 0 {
@@ -160,26 +164,29 @@ func (w *Window) readApplicationAsset(path string) ([]byte, error) {
 func (w *Window) cHandle() unsafe.Pointer   { return w.handle }
 func (w *Window) cInstance() unsafe.Pointer { return w.instance }
 
-func (w *Window) showWindow()                   {}
-func (w *Window) cursorStandard()               {}
-func (w *Window) cursorIbeam()                  {}
-func (w *Window) cursorSizeAll()                {}
-func (w *Window) cursorSizeNS()                 {}
-func (w *Window) cursorSizeWE()                 {}
-func (w *Window) focus()                        {}
-func (w *Window) position() (x, y int)          { return 0, 0 }
-func (w *Window) setPosition(x, y int)          {}
-func (w *Window) setSize(width, height int)     {}
-func (w *Window) removeBorder()                 {}
-func (w *Window) addBorder()                    {}
-func (w *Window) showCursor()                   {}
-func (w *Window) hideCursor()                   {}
-func (w *Window) lockCursor(x, y int)           {}
-func (w *Window) unlockCursor()                 {}
-func (w *Window) setFullscreen()                {}
-func (w *Window) setWindowed(width, height int) {}
-func (w *Window) enableRawMouse()               {}
-func (w *Window) disableRawMouse()              {}
-func (w Window) setTitle(newTitle string)       {}
-func (w *Window) setCursorPosition(x, y int)    {}
-func (w *Window) setIcon(img image.Image)       {}
+func (w *Window) showWindow()                       {}
+func (w *Window) cursorStandard()                   {}
+func (w *Window) cursorIbeam()                      {}
+func (w *Window) cursorSizeAll()                    {}
+func (w *Window) cursorSizeNS()                     {}
+func (w *Window) cursorSizeWE()                     {}
+func (w *Window) focus()                            {}
+func (w *Window) position() (x, y int)              { return 0, 0 }
+func (w *Window) setPosition(x, y int)              {}
+func (w *Window) setSize(width, height int)         {}
+func (w *Window) removeBorder()                     {}
+func (w *Window) addBorder()                        {}
+func (w *Window) showCursor()                       {}
+func (w *Window) hideCursor()                       {}
+func (w *Window) lockCursor(x, y int)               {}
+func (w *Window) unlockCursor()                     {}
+func (w *Window) setFullscreen()                    {}
+func (w *Window) setWindowed(width, height int)     {}
+func (w *Window) enableRawMouse()                   {}
+func (w *Window) disableRawMouse()                  {}
+func (w Window) setTitle(newTitle string)           {}
+func (w *Window) setTitleBarMode(mode TitleBarMode) {}
+func (w *Window) getTitleBarMode() TitleBarMode     { return w.titleBarMode }
+func (w *Window) setCursorPosition(x, y int)        {}
+func (w *Window) setIcon(img image.Image)           {}
+func (w *Window) setFileDropEnabled(enabled bool)   {}

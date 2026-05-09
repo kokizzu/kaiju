@@ -69,6 +69,7 @@ package windowing
 #cgo noescape window_set_cursor_position
 #cgo noescape window_set_icon
 #cgo noescape window_invalidate_monitor_cache
+#cgo noescape screen_count
 
 #include <stdlib.h>
 #include "windowing.h"
@@ -194,6 +195,10 @@ func (w *Window) invalidateMonitorCache() {
 	C.window_invalidate_monitor_cache(w.handle)
 }
 
+func (w *Window) monitorCount() int {
+	return int(C.screen_count(w.handle))
+}
+
 func (w *Window) dotsPerMillimeter() float64 {
 	return float64(C.window_dpi(w.handle))
 }
@@ -207,6 +212,10 @@ func (w Window) setTitle(name string) {
 	defer C.free(unsafe.Pointer(title))
 	C.window_set_title(w.handle, title)
 }
+
+// TODO: placeholder
+func (w *Window) setTitleBarMode(mode TitleBarMode) {}
+func (w *Window) getTitleBarMode() TitleBarMode     { return w.titleBarMode }
 
 func (w Window) setFullscreen() {
 	C.window_set_full_screen(w.handle)
@@ -251,6 +260,9 @@ func (w *Window) setIcon(img image.Image) {
 	}
 	C.window_set_icon(w.handle, C.int(width), C.int(height), (*C.uchar)(&rgba.Pix[0]))
 }
+
+// TODO: placeholder
+func (w *Window) setFileDropEnabled(enabled bool) {}
 
 func (w *Window) readApplicationAsset(path string) ([]byte, error) {
 	return []byte{}, errors.New("linux doesn't support application assets")

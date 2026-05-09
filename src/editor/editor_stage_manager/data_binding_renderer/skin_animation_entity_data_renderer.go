@@ -159,6 +159,9 @@ func (c *SkinAnimationEntityDataRenderer) bindSkin(host *engine.Host, target *ed
 				bone.Id = j.Id
 				bone.Skin = j.Skin
 				bone.Transform.Initialize(host.WorkGroup())
+				bone.Transform.SetLocalPosition(j.Position)
+				bone.Transform.SetRotation(j.Rotation)
+				bone.Transform.SetScale(j.Scale)
 			}
 			for i := range km.Joints {
 				bone := skin.BoneByIndex(i)
@@ -169,9 +172,6 @@ func (c *SkinAnimationEntityDataRenderer) bindSkin(host *engine.Host, target *ed
 				} else {
 					bone.Transform.SetParent(&target.Transform)
 				}
-				bone.Transform.SetLocalPosition(j.Position)
-				bone.Transform.SetRotation(j.Rotation)
-				bone.Transform.SetScale(j.Scale)
 			}
 		}
 		g.animations = km.Animations

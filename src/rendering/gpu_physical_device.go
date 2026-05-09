@@ -42,8 +42,6 @@ import (
 	"unsafe"
 
 	"kaijuengine.com/platform/profiler/tracing"
-	vk "kaijuengine.com/rendering/vulkan"
-	"kaijuengine.com/rendering/vulkan_const"
 )
 
 type GPUPhysicalDevice struct {
@@ -303,26 +301,7 @@ func (g *GPUPhysicalDevice) IsExtensionSupported(extension string) bool {
 
 func (g *GPUPhysicalDevice) MaxUsableSampleCount() GPUSampleCountFlags {
 	defer tracing.NewRegion("GPUPhysicalDevice.MaxUsableSampleCount").End()
-	counts := vk.SampleCountFlags(g.Properties.Limits.FramebufferColorSampleCounts & g.Properties.Limits.FramebufferDepthSampleCounts)
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount64Bit)) != 0 {
-		return GPUSampleCount64Bit
-	}
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount32Bit)) != 0 {
-		return GPUSampleCount32Bit
-	}
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount16Bit)) != 0 {
-		return GPUSampleCount16Bit
-	}
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount8Bit)) != 0 {
-		return GPUSampleCount8Bit
-	}
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount4Bit)) != 0 {
-		return GPUSampleCount4Bit
-	}
-	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount2Bit)) != 0 {
-		return GPUSampleCount2Bit
-	}
-	return GPUSampleCount1Bit
+	return g.maxUsableSampleCount()
 }
 
 func (g *GPUPhysicalDevice) FormatProperties(format GPUFormat) GPUFormatProperties {

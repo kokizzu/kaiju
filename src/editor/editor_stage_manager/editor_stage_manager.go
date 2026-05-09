@@ -93,6 +93,7 @@ type StageManager struct {
 // like content linkage, data bindings, etc.
 type StageEntityEditorData struct {
 	Bvh                   *collision.BVH
+	WorldBvh              *collision.BVH
 	Mesh                  *rendering.Mesh
 	ShaderData            rendering.DrawInstance
 	Description           stages.EntityDescription
@@ -200,9 +201,6 @@ func (m *StageManager) AddEntityWithId(id, name string, point matrix.Vec3) *Stag
 		}
 		if e.StageData.ShaderData != nil {
 			e.StageData.ShaderData.Destroy()
-		}
-		if e.StageData.Bvh != nil {
-			collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 		}
 		se := we.Value()
 		sm.RemoveEntityBVH(se)
@@ -340,13 +338,27 @@ func (m *StageManager) Clear() {
 	m.worldBVH = nil
 }
 
-func (m *StageManager) RefitWorldBVH() { m.worldBVH.Refit() }
+func (m *StageManager) RefitWorldBVH() {
+	defer tracing.NewRegion("StageManager.RefitWorldBVH").End()
+	for _, e := range m.entities {
+		if e.isDeleted || e.StageData.Bvh == nil {
+			continue
+		}
+		e.StageData.Bvh.Refit()
+	}
+	m.worldBVH.Refit()
+}
 
-func (m *StageManager) AddBVH(bvh *collision.BVH, transform *matrix.Transform) {
+func (m *StageManager) AddBVH(e *StageEntity) {
 	defer tracing.NewRegion("StageManager.AddBVH").End()
-	cpy := collision.CloneBVH(bvh)
-	collision.AddSubBVH(&m.worldBVH, cpy, transform)
-	m.RefitWorldBVH()
+	if e == nil || e.StageData.Bvh == nil {
+		return
+	}
+	if e.StageData.WorldBvh != nil {
+		m.RemoveEntityBVH(e)
+	}
+	e.StageData.WorldBvh = collision.AddSubBVH(&m.worldBVH,
+		e.StageData.Bvh, &e.Transform)
 }
 
 //func (m *StageManager) RemoveBVH(bvh *collision.BVH) {
@@ -356,6 +368,14 @@ func (m *StageManager) AddBVH(bvh *collision.BVH, transform *matrix.Transform) {
 
 func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
 	defer tracing.NewRegion("StageManager.RemoveBVH").End()
+	if e == nil {
+		return
+	}
+	if e.StageData.WorldBvh != nil {
+		collision.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
+		e.StageData.WorldBvh = nil
+		return
+	}
 	collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 }
 
@@ -692,7 +712,8 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	case "plane":
 		km.Verts, km.Indexes = rendering.MeshPlaneData()
 	default:
-		kmData, err := fs.ReadFile(filepath.Join(rootFolder, meshFolder, meshId))
+		meshPath := filepath.Join(rootFolder, meshFolder, meshId)
+		kmData, err := fs.ReadFile(meshPath)
 		if err != nil {
 			slog.Error("failed to load the mesh data", "id", meshId, "error", err)
 			return err
@@ -746,12 +767,13 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	mat = mat.CreateInstance(texs)
 	e.StageData.ShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
 	e.StageData.Mesh = mesh
-	// Temp set position to 0,0,0 for the BVH generation
-	ePos := e.Transform.Position()
-	e.Transform.SetPosition(matrix.Vec3Zero())
+	missingBVH := km.BVH == nil && meshId != "quad" && meshId != "plane"
 	e.StageData.Bvh = km.GenerateBVH(host.Threads(), &e.Transform, e)
-	e.Transform.SetPosition(ePos)
-	m.AddBVH(e.StageData.Bvh, &e.Transform)
+	if missingBVH {
+		content_database.SaveMeshBVHInBackground(km,
+			filepath.Join(rootFolder, meshFolder, meshId), fs, meshId)
+	}
+	m.AddBVH(e)
 	host.RunOnMainThread(func() {
 		for i := range texs {
 			texs[i].DelayedCreate(host.Window.GpuInstance.PrimaryDevice())
@@ -804,17 +826,27 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 		}
 		e.Transform.Copy(t)
 	}
-	m.worldBVH.Refit()
+	m.RefitWorldBVH()
 	m.history.Clear()
 	return nil
 }
 
 func (m *StageManager) RefitBVH(entity *StageEntity) {
-	// TODO:  It's getting a little late, but I may need to track all of the
-	// nodes that were related to each other when they were created and only
-	// update the matching ones here. For now I'm just going to update the whole
-	// tree before it gets too late.
-	m.RefitWorldBVH()
+	defer tracing.NewRegion("StageManager.RefitBVH").End()
+	if entity == nil {
+		return
+	}
+	for _, e := range explodeEntityHierarchy(entity) {
+		if e.isDeleted || e.StageData.Bvh == nil {
+			continue
+		}
+		if e.StageData.WorldBvh == nil {
+			m.AddBVH(e)
+			continue
+		}
+		e.StageData.Bvh.Refit()
+		e.StageData.WorldBvh.RefitUpwards()
+	}
 }
 
 func explodeEntityHierarchy(e *StageEntity) []*StageEntity {

@@ -119,9 +119,9 @@ func (ed *Editor) RecompileWithPlugins(plugins []editor_plugin.PluginInfo, onCom
 
 	var cmd *exec.Cmd
 	if build.Debug {
-		cmd = exec.Command("go", "build", "-tags=debug,editor", "-o", filepath.Base(exe), ".")
+		cmd = exec.Command("go", "build", "-tags=debug,editor,filedrop", "-o", filepath.Base(exe), ".")
 	} else {
-		cmd = exec.Command("go", "build", "-tags=editor", "-o", filepath.Base(exe), ".")
+		cmd = exec.Command("go", "build", "-tags=editor,filedrop", "-o", filepath.Base(exe), ".")
 	}
 	cmd.Dir = to
 

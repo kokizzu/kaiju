@@ -115,7 +115,7 @@ func Import(path string, fs *project_file_system.FileSystem, cache *Cache, linke
 	dependencyMap := map[string][]ImportResult{}
 	for i := range proc.Variants {
 		res[i].Category = cat
-		res[i].generateUniqueFileId(fs)
+		res[i].generateUniqueFileId(fs, filepath.Ext(path))
 		if useLinkedId && linkedId == "" {
 			linkedId = res[i].Id
 		}
@@ -168,6 +168,10 @@ func Import(path string, fs *project_file_system.FileSystem, cache *Cache, linke
 	return res, err
 }
 
+type postReimportProcessor interface {
+	PostReimportProcessing(proc ProcessedImport, res *ImportResult, fs *project_file_system.FileSystem, cache *Cache) error
+}
+
 func Reimport(id string, fs *project_file_system.FileSystem, cache *Cache) (ImportResult, error) {
 	defer tracing.NewRegion("content_database.Reimport").End()
 	cc, err := cache.Read(id)
@@ -200,6 +204,9 @@ func Reimport(id string, fs *project_file_system.FileSystem, cache *Cache) (Impo
 	}
 	if err = fs.WriteFile(res.ContentPath().String(), proc.Variants[0].Data, os.ModePerm); err != nil {
 		return res, err
+	}
+	if post, ok := cat.(postReimportProcessor); ok {
+		err = post.PostReimportProcessing(proc, &res, fs, cache)
 	}
 	return res, nil
 }

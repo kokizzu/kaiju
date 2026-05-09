@@ -393,3 +393,27 @@ func mapSampleCountFlags(bits vk.SampleCountFlags) GPUSampleCountFlags {
 	// The underlying values match (1, 2, 4, 8, 16, 32, 64), so a simple conversion is sufficient.
 	return GPUSampleCountFlags(bits)
 }
+
+func (g *GPUPhysicalDevice) maxUsableSampleCount() GPUSampleCountFlags {
+	defer tracing.NewRegion("GPUPhysicalDevice.maxUsableSampleCount").End()
+	counts := vk.SampleCountFlags(g.Properties.Limits.FramebufferColorSampleCounts & g.Properties.Limits.FramebufferDepthSampleCounts)
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount64Bit)) != 0 {
+		return GPUSampleCount64Bit
+	}
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount32Bit)) != 0 {
+		return GPUSampleCount32Bit
+	}
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount16Bit)) != 0 {
+		return GPUSampleCount16Bit
+	}
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount8Bit)) != 0 {
+		return GPUSampleCount8Bit
+	}
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount4Bit)) != 0 {
+		return GPUSampleCount4Bit
+	}
+	if (counts & vk.SampleCountFlags(vulkan_const.SampleCount2Bit)) != 0 {
+		return GPUSampleCount2Bit
+	}
+	return GPUSampleCount1Bit
+}

@@ -67,7 +67,7 @@ func main() {
 	args := []string{
 		"build",
 		"-buildmode=c-shared",
-		"-tags=debug,editor",
+		"-tags=debug,editor,filedrop",
 		"-o", filepath.Join(outPath, "/libkaiju_android.so"),
 		".",
 	}

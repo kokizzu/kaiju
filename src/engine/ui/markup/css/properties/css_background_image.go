@@ -53,17 +53,20 @@ func (p BackgroundImage) Process(panel *ui.Panel, elm *document.Element, values 
 	if len(values) != 1 {
 		return fmt.Errorf("Expected exactly 1 value but got %d", len(values))
 	}
+
 	reg := regexp.MustCompile(`url\s{0,}\(\s{0,}"(.*?)"\s{0,}\)`)
-	if parts := reg.FindStringSubmatch(values[0].Str); len(parts) != 2 {
+	parts := reg.FindStringSubmatch(values[0].Str)
+	if len(parts) != 2 {
 		return fmt.Errorf("Expected exactly 1 url but got %d", len(parts)-1)
-	} else {
-		path := strings.TrimSpace(parts[1])
-		if tex, err := host.TextureCache().Texture(path, rendering.TextureFilterLinear); err != nil {
-			return err
-		} else {
-			panel.SetBackground(tex)
-			panel.SetColor(matrix.ColorWhite())
-			return nil
-		}
 	}
+
+	path := strings.TrimSpace(parts[1])
+	tex, err := host.TextureCache().Texture(path, rendering.TextureFilterLinear)
+	if err != nil {
+		return err
+	}
+
+	panel.SetBackground(tex)
+	panel.SetColor(matrix.ColorWhite())
+	return nil
 }

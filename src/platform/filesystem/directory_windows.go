@@ -113,6 +113,10 @@ func openFileBrowserCommand(path string) *exec.Cmd {
 	return exec.Command("cmd.exe", "/C", "start", path)
 }
 
+func openFileBrowserSelectCommand(path string) *exec.Cmd {
+	return exec.Command("explorer.exe", "/select,", path)
+}
+
 func openFileDialogWindow(startPath string, extensions []DialogExtension, ok func(path string), cancel func(), windowHandle unsafe.Pointer) error {
 	ext := strings.Builder{}
 	for i := range extensions {

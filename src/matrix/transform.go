@@ -369,6 +369,7 @@ func (t *Transform) SetWorldScale(scale Vec3) {
 	t.SetScale(localScale)
 }
 
+// uses centered coordinates
 func (t *Transform) ContainsPoint2D(point Vec2) bool {
 	p, _, s := t.WorldTransform()
 	l := p.X() - (s.X() * 0.5)

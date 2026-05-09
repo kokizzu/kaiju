@@ -41,6 +41,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"kaijuengine.com/editor/project/project_file_system"
@@ -61,6 +62,7 @@ type Cache struct {
 	lookup          map[string]int
 	isBuilding      atomic.Bool
 	OnBuildFinished events.Event
+	mutex           sync.RWMutex
 }
 
 // CachedContent is the content entry in the cache that is returned from lookups
@@ -103,6 +105,8 @@ func (c *Cache) Read(id string) (CachedContent, error) {
 	if c.isBuilding.Load() {
 		return CachedContent{}, ReadDuringBuildError{}
 	}
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 	if idx, ok := c.lookup[id]; !ok {
 		return CachedContent{}, NotInCacheError{Id: id}
 	} else {
@@ -230,6 +234,7 @@ func (c *Cache) SearchSources(typeName, src string) []CachedContent {
 func (c *Cache) Build(pfs *project_file_system.FileSystem) error {
 	defer tracing.NewRegion("Cache.Build").End()
 	c.isBuilding.Store(true)
+	c.mutex.Lock()
 	if cap(c.cache) == 0 {
 		c.cache = make([]CachedContent, 0, 1024)
 		c.lookup = make(map[string]int, 1024)
@@ -237,6 +242,7 @@ func (c *Cache) Build(pfs *project_file_system.FileSystem) error {
 		klib.WipeSlice(c.cache)
 		clear(c.lookup)
 	}
+	c.mutex.Unlock()
 	root := pfs.FullPath(project_file_system.ContentConfigFolder)
 	err := filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
 		if info.IsDir() {
@@ -273,6 +279,8 @@ func (c *Cache) Index(path string, pfs *project_file_system.FileSystem) error {
 }
 
 func (c *Cache) IndexCachedContent(cc CachedContent) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	if idx, ok := c.lookup[cc.Id()]; ok {
 		c.cache[idx] = cc
 	} else {
@@ -289,6 +297,8 @@ func (c *Cache) IndexCachedContent(cc CachedContent) {
 // entry and it's lookup will be updated.
 func (c *Cache) Remove(id string) {
 	defer tracing.NewRegion("Cache.Remove").End()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	if idx, ok := c.lookup[id]; ok {
 		lastCacheIdx := len(c.cache) - 1
 		delete(c.lookup, id)
@@ -305,26 +315,34 @@ func (c *Cache) Remove(id string) {
 
 func (c *Cache) ChangeGuid(from, to string, pfs *project_file_system.FileSystem) error {
 	defer tracing.NewRegion("Cache.ChangeGuid").End()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	// Check if the new id already exists in the cache
 	if _, ok := c.lookup[to]; ok {
 		return DuplicateIdError{Id: to}
 	}
-	// Read the current cached content
-	cc, err := c.Read(from)
-	if err != nil {
+
+	// Read the current cached content without calling Read (re-locks)
+	idx, ok := c.lookup[from]
+	if !ok {
+		err := NotInCacheError{Id: from}
 		slog.Error("failed to read cached content for guid change", "from", from, "to", to, "error", err)
 		return err
 	}
+	cc := c.cache[idx]
+
 	// Build new paths with the new id
 	dir := filepath.Dir(cc.Path)
 	newConfigPath := filepath.Join(dir, to) + filepath.Ext(cc.Path)
 	oldContentPath := cc.ContentPath()
 	newContentPath := ToContentPath(newConfigPath)
+
 	// Rename the config file
 	if err := pfs.Rename(cc.Path, newConfigPath); err != nil {
 		slog.Error("failed to rename config file", "from", cc.Path, "to", newConfigPath, "error", err)
 		return err
 	}
+
 	// Rename the content file
 	if err := pfs.Rename(oldContentPath, newContentPath); err != nil {
 		slog.Error("failed to rename content file", "from", oldContentPath, "to", newContentPath, "error", err)
@@ -334,9 +352,11 @@ func (c *Cache) ChangeGuid(from, to string, pfs *project_file_system.FileSystem)
 		}
 		return err
 	}
-	// Update the cache, remove old and add new
-	c.Remove(from)
+
+	// Update the cache inline without methods that re-lock
+	delete(c.lookup, from)
 	cc.Path = newConfigPath
-	c.IndexCachedContent(cc)
+	c.cache[idx] = cc
+	c.lookup[to] = idx
 	return nil
 }

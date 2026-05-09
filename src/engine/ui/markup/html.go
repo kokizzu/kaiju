@@ -70,10 +70,15 @@ func DocumentFromHTMLString(uiMan *ui.Manager, html, cssStr string, withData any
 	window := host.Window
 	doc := document.DocumentFromHTMLString(uiMan, html, withData, funcMap)
 	if root != nil {
-		for i := range doc.TopElements {
-			root.UIPanel.AddChild(doc.TopElements[i].UI)
-			root.Children = append(root.Children, doc.TopElements[i])
-			doc.TopElements[i].Parent = weak.Make(root)
+		// Root the HTML body under the provided root element so layout behaves
+		// like a normal document tree. Reparenting only top children can break
+		// width containment and lead to runaway size feedback in previews.
+		if bodyElms := doc.GetElementsByTagName("body"); len(bodyElms) > 0 {
+			body := bodyElms[0]
+			root.UIPanel.AddChild(body.UI)
+			root.Children = append(root.Children, body)
+			body.Parent = weak.Make(root)
+			doc.TopElements = []*document.Element{body}
 		}
 	}
 	s := rules.NewStyleSheet()

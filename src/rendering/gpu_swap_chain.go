@@ -37,6 +37,7 @@
 package rendering
 
 import (
+	"fmt"
 	"log/slog"
 
 	"kaijuengine.com/engine/assets"
@@ -174,6 +175,12 @@ func (g *GPUSwapChain) SetupRenderPass(device *GPUDevice, assets assets.Database
 
 func (g *GPUSwapChain) SetupSyncObjects(device *GPUDevice) error {
 	defer tracing.NewRegion("GPUSwapChain.SetupSyncObjects").End()
+	if len(g.Images) == 0 {
+		return fmt.Errorf("cannot set up sync objects for empty swap chain")
+	}
+	if len(g.Images) > maxFramesInFlight {
+		return fmt.Errorf("swap chain image count (%d) exceeds max frames in flight (%d)", len(g.Images), maxFramesInFlight)
+	}
 	g.resetSyncObjects(device)
 	err := g.setupSyncObjectsImpl(device)
 	if err != nil {

@@ -27,6 +27,7 @@ docs/api
 external/bin
 interpreter/kaiju-*
 *.zip
+.gocache
 
 # Go pprof files
 heap.prof
@@ -46,3 +47,6 @@ kaiju_android.so
 # Game generated files
 game_content/
 /.run/*.run.xml
+
+# Toolings
+package-lock.json

@@ -72,12 +72,10 @@ func (j *KaijuMeshJoint) fromLoadResult(res *load_result.Result, r *load_result.
 	j.Id = r.Id
 	j.Skin = r.Skin
 	n := &res.Nodes[j.Id]
-	if n.Parent >= 0 {
-		j.Parent = int32(n.Parent)
-		j.Position = n.Position
-		j.Rotation = n.Rotation.ToEuler()
-		j.Scale = n.Scale
-	}
+	j.Parent = int32(n.Parent)
+	j.Position = n.Position
+	j.Rotation = n.Rotation.ToEuler()
+	j.Scale = n.Scale
 }
 
 func (a *KaijuMeshAnimation) fromLoadResult(r *load_result.Animation) {

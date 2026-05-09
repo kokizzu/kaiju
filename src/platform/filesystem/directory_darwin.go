@@ -95,6 +95,13 @@ func openFileBrowserCommand(path string) *exec.Cmd {
 	return exec.Command("open", path)
 }
 
+func openFileBrowserSelectCommand(path string) *exec.Cmd {
+	if path == "" {
+		return exec.Command("open", ".")
+	}
+	return exec.Command("open", "-R", path)
+}
+
 func openFileDialogWindow(startPath string, extensions []DialogExtension, ok func(path string), cancel func(), windowHandle unsafe.Pointer) error {
 	// Use osascript (AppleScript) to show native macOS file picker
 	script := `POSIX path of (choose file`

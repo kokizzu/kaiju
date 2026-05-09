@@ -173,6 +173,28 @@ func OpenFileBrowserToFolder(path string) error {
 	return err
 }
 
+func OpenFileBrowserToItem(path string) error {
+	target := filepath.Clean(path)
+	err := openFileBrowserSelectCommand(target).Run()
+	if err == nil {
+		return nil
+	}
+
+	// NOTE: kaijuEngine saves imported files as uuid (no extension)
+	// -> openFileBrowserSelectCommand() can fail because of it
+	// -> try openening "parent folder" can then select the file
+	if fi, statErr := os.Stat(target); statErr == nil && !fi.IsDir() {
+		target = filepath.Dir(target)
+	}
+	openErr := openFileBrowserCommand(target).Run()
+	if openErr == nil {
+		return nil
+	}
+	slog.Error("failed to open file in file browser", "path", target, "error", openErr)
+
+	return err
+}
+
 func OpenFileDialogWindow(startPath string, extensions []DialogExtension, ok func(path string), cancel func(), windowHandle unsafe.Pointer) error {
 	return openFileDialogWindow(startPath, extensions, ok, cancel, windowHandle)
 }

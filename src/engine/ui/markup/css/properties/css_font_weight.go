@@ -63,6 +63,7 @@ func (p FontWeight) Process(panel *ui.Panel, elm *document.Element, values []rul
 	if len(values) != 1 {
 		return errors.New("FontWeight requires exactly 1 value")
 	}
+
 	setChildrenFontWeight(elm, values[0].Str)
 	return nil
 }

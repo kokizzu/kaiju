@@ -51,9 +51,8 @@ import (
 func marginSizeFromStr(str string, window *windowing.Window) float32 {
 	if val, ok := borderSizes[str]; ok {
 		return val
-	} else {
-		return helpers.NumFromLength(str, window)
 	}
+	return helpers.NumFromLength(str, window)
 }
 
 func preprocLeftTopRightBottom(values []rules.PropertyValue, rules []rules.Rule, propName string) ([]rules.PropertyValue, []rules.Rule) {
@@ -77,6 +76,7 @@ func (Margin) Preprocess(values []rules.PropertyValue, rules []rules.Rule) ([]ru
 	case 3:
 		values = append(values, values[1])
 	}
+
 	for i := 1; i < len(rules); i++ {
 		removeRule := false
 		switch rules[i].Property {
@@ -101,6 +101,7 @@ func (Margin) Preprocess(values []rules.PropertyValue, rules []rules.Rule) ([]ru
 	return values, rules
 }
 
+// TODO: this error handling is broken
 func (Margin) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	var err error
 	if len(values) == 1 {

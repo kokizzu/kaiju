@@ -71,4 +71,6 @@ type MenuBarHandler interface {
 	CreateNewLight()
 	CreatePluginProject(path string)
 	CreateHtmlUiFile(name string)
+	CreateCssStylesheetFile(name string)
+	SetGridVisible(visible bool)
 }

@@ -81,7 +81,7 @@ func commonAttached(host *engine.Host, manager *editor_stage_manager.StageManage
 	box := collision.AABB{}
 	box.Extent = target.Transform.WorldScale().Scale(0.5)
 	target.StageData.Bvh = collision.NewBVH([]collision.HitObject{box}, &target.Transform, target)
-	manager.AddBVH(target.StageData.Bvh, &target.Transform)
+	manager.AddBVH(target)
 	target.OnDeactivate.Add(sd.Deactivate)
 	target.OnActivate.Add(sd.Activate)
 	return sd

@@ -37,7 +37,7 @@
 package properties
 
 import (
-	"errors"
+	"fmt"
 
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/ui"
@@ -46,7 +46,24 @@ import (
 )
 
 func (p AspectRatio) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	problems := []error{errors.New("AspectRatio not implemented")}
+	if len(values) == 0 {
+		return fmt.Errorf("AspectRatio requires at least 1 value")
+	}
 
-	return problems[0]
+	valueStrs := make([]string, 0, len(values))
+	for i := range values {
+		valueStrs = append(valueStrs, values[i].Str)
+	}
+	ratio, ok := parseRatio(valueStrs)
+	if !ok {
+		disableAspectRatio(panel)
+		return nil
+	}
+	enableAspectRatio(panel, ratio)
+
+	layout := panel.Base().Layout()
+	width := applyWidthConstraints(panel, layout.PixelSize().Width())
+	height := applyHeightConstraints(panel, width/ratio)
+	layout.Scale(width, height)
+	return nil
 }

@@ -62,17 +62,6 @@ const (
 
 var (
 	arrStringReg = regexp.MustCompile(`\[(\d+)\]`)
-	defTypes     = map[string]shaderFieldType{
-		"float":  {uint32(floatSize), vulkan_const.FormatR32Sfloat, 1},
-		"vec2":   {uint32(floatSize) * 2, vulkan_const.FormatR32g32Sfloat, 1},
-		"vec3":   {uint32(floatSize) * 3, vulkan_const.FormatR32g32b32Sfloat, 1},
-		"vec4":   {uint32(vec4Size), vulkan_const.FormatR32g32b32a32Sfloat, 1},
-		"mat4":   {uint32(vec4Size), vulkan_const.FormatR32g32b32a32Sfloat, 4},
-		"int":    {uint32(int32Size), vulkan_const.FormatR32Sint, 1},
-		"int32":  {uint32(int32Size), vulkan_const.FormatR32Sint, 1},
-		"uint":   {uint32(uint32Size), vulkan_const.FormatR32Uint, 1},
-		"uint32": {uint32(uint32Size), vulkan_const.FormatR32Uint, 1},
-	}
 )
 
 type ShaderLayoutStructField struct {
@@ -145,6 +134,9 @@ func (l *ShaderLayout) FullName() string {
 
 func (l *ShaderLayout) IsBuffer() bool {
 	// Ignore the global uniform buffer for now
+	if l.Type == "StorageBuffer" {
+		return true
+	}
 	if l.Location < 0 || l.Type == "UniformBufferObject" {
 		return false
 	}

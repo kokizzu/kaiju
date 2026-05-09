@@ -57,31 +57,59 @@
 #include "win32.h"
 #include <assert.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 #include <windowsx.h>
+#include <dwmapi.h>
+
+#ifndef KAIJU_ENABLE_FILEDROP
+#define KAIJU_ENABLE_FILEDROP 0
+#endif
+
+#if KAIJU_ENABLE_FILEDROP
+#include <shellapi.h>
+#endif
+
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20
+#define DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20 19
+#endif
+
+#define WINDOW_TITLE_BAR_MODE_SYSTEM 0
+#define WINDOW_TITLE_BAR_MODE_LIGHT 1
+#define WINDOW_TITLE_BAR_MODE_DARK 2
+
+static void apply_title_bar_mode(HWND hwnd, int mode);
+static bool user_prefers_dark_mode(void);
 
 /*
 * Messages defined here are NOT to be sent to other windows
 * https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerwindowmessagea#remarks
 */
-#define UWM_SET_CURSOR		(WM_USER + 0x0001)
-#define CURSOR_ARROW        1
-#define CURSOR_IBEAM        2
-#define CURSOR_WAIT         3
-#define CURSOR_CROSS        4
-#define CURSOR_UPARROW      5
-#define CURSOR_SIZE_NWSE    6
-#define CURSOR_SIZE_NESW    7
-#define CURSOR_SIZE_WE      8
-#define CURSOR_SIZE_NS      9
-#define CURSOR_SIZE_ALL     10
-#define CURSOR_NO           11
-#define CURSOR_HAND         12
-#define CURSOR_APP_STARTING 13
-#define CURSOR_HELP         14
-#define CURSOR_PIN          15
-#define CURSOR_PERSON       16
+#define UWM_SET_CURSOR         (WM_USER + 0x0001)
+#define UWM_SET_TITLE_BAR_MODE (WM_USER + 0x0002)
+#if KAIJU_ENABLE_FILEDROP
+#define UWM_SET_FILE_DROP      (WM_USER + 0x0003)
+#endif
+#define CURSOR_ARROW           1
+#define CURSOR_IBEAM           2
+#define CURSOR_WAIT            3
+#define CURSOR_CROSS           4
+#define CURSOR_UPARROW         5
+#define CURSOR_SIZE_NWSE       6
+#define CURSOR_SIZE_NESW       7
+#define CURSOR_SIZE_WE         8
+#define CURSOR_SIZE_NS         9
+#define CURSOR_SIZE_ALL        10
+#define CURSOR_NO              11
+#define CURSOR_HAND            12
+#define CURSOR_APP_STARTING    13
+#define CURSOR_HELP            14
+#define CURSOR_PIN             15
+#define CURSOR_PERSON          16
 
 static inline void readMousePosition(LPARAM lParam, int32_t* x, int32_t* y) {
 	*x = GET_X_LPARAM(lParam);
@@ -208,6 +236,14 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					break;
 			}
 			shared_mem_flush_events(sm);
+			break;
+		}
+		case WM_SETTINGCHANGE:
+		case WM_THEMECHANGED:
+		{
+			if (sm != NULL && sm->titleBarMode == WINDOW_TITLE_BAR_MODE_SYSTEM) {
+				apply_title_bar_mode(hwnd, sm->titleBarMode);
+			}
 			break;
 		}
 		case WM_MOVE:
@@ -459,6 +495,58 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			shared_mem_add_event(sm, evt);
 			break;
 		}
+#if KAIJU_ENABLE_FILEDROP
+		case WM_DROPFILES:
+		{
+			HDROP hDrop = (HDROP)wParam;
+			UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+			POINT pt = { 0 };
+			DragQueryPoint(hDrop, &pt); // drop position (x, y) relative to client area
+			if (sm != NULL && fileCount > 0) {
+				char** paths = (char**)calloc(fileCount, sizeof(char*));
+				uint32_t pathCount = 0;
+				if (paths != NULL) {
+					for (UINT i = 0; i < fileCount; ++i) {
+						UINT wideLen = DragQueryFileW(hDrop, i, NULL, 0);
+						if (wideLen == 0) {
+							continue;
+						}
+						wchar_t* widePath = (wchar_t*)calloc((size_t)wideLen + 1, sizeof(wchar_t));
+						if (widePath == NULL) {
+							continue;
+						}
+						if (DragQueryFileW(hDrop, i, widePath, wideLen + 1) > 0) {
+							// Query the exact UTF-8 size first so long paths are not truncated.
+							int utf8Len = WideCharToMultiByte(CP_UTF8, 0, widePath, -1, NULL, 0, NULL, NULL);
+							if (utf8Len > 0) {
+								char* utf8Path = (char*)calloc((size_t)utf8Len, sizeof(char));
+								if (utf8Path != NULL) {
+									int bytes = WideCharToMultiByte(CP_UTF8, 0, widePath, -1, utf8Path, utf8Len, NULL, NULL);
+									if (bytes > 0) {
+										paths[pathCount++] = utf8Path;
+									} else {
+										free(utf8Path);
+									}
+								}
+							}
+						}
+						free(widePath);
+					}
+					if (pathCount > 0) {
+						goProcessFileDrop((uint64_t)sm->goWindow, (int32_t)pt.x, (int32_t)pt.y, paths, pathCount);
+					}
+
+					// free dropped paths
+					for (uint32_t i = 0; i < pathCount; ++i) {
+						free(paths[i]);
+					}
+					free(paths);
+				}
+			}
+			DragFinish(hDrop);
+			break;
+		}
+#endif
 		case WM_SETCURSOR:
 		{
 			if (sm != NULL && sm->cursorHidden) {
@@ -526,6 +614,19 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
+		case UWM_SET_TITLE_BAR_MODE:
+		{
+			sm->titleBarMode = (int)wParam;
+			apply_title_bar_mode(hwnd, sm->titleBarMode);
+			return 0;
+		}
+#if KAIJU_ENABLE_FILEDROP
+		case UWM_SET_FILE_DROP:
+		{
+			DragAcceptFiles(hwnd, wParam ? TRUE : FALSE);
+			return 0;
+		}
+#endif
 	}
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
@@ -556,16 +657,18 @@ void window_main(const wchar_t* windowTitle,
     wc.lpszClassName = className;
 	wc.hCursor		 = LoadCursor(NULL, IDC_ARROW);
 	wc.hIcon		 = LoadIcon(NULL, IDI_APPLICATION);
-    RegisterClass(&wc);
+	// NOTE: could expose the colors to user later, but leave it as is for now
+	wc.hbrBackground = CreateSolidBrush(user_prefers_dark_mode() ? RGB(0,0,0) : RGB(255,255,255));
+	RegisterClass(&wc);
 	RECT clientArea = {0, 0, width, height};
 	AdjustWindowRectEx(&clientArea, WS_OVERLAPPEDWINDOW, FALSE, 0);
 	width = clientArea.right-clientArea.left;
 	height = clientArea.bottom-clientArea.top;
-	if (x < 0) {
-		x = CW_USEDEFAULT;
-	}
-	if (y < 0) {
-		x = CW_USEDEFAULT;
+	if (x < 0 || y < 0) {
+		int screenWidth = GetSystemMetrics(SM_CXSCREEN);  // primary screen
+		int screenHeight = GetSystemMetrics(SM_CYSCREEN); // primary screen
+		x = (screenWidth - width) / 2;
+		y = (screenHeight - height) / 2;
 	}
     // Create the window.
     HWND hwnd = CreateWindowEx(
@@ -581,6 +684,7 @@ void window_main(const wchar_t* windowTitle,
 	);
 	SharedMem* sm = calloc(1, sizeof(SharedMem));
 	sm->goWindow = (void*)goWindow;
+	sm->titleBarMode = WINDOW_TITLE_BAR_MODE_LIGHT;
     if (hwnd == NULL) {
 		shared_mem_add_event(sm, (WindowEvent) {
 			.type = WINDOW_EVENT_TYPE_FATAL,
@@ -816,6 +920,11 @@ float window_dpi(void* hwnd) {
 	return ((float)GetDpiForWindow(hwnd));
 }
 
+int screen_count(void* hwnd) {
+	(void)hwnd;
+	return GetSystemMetrics(SM_CMONITORS);
+}
+
 int screen_width_mm(void* hwnd) {
     HDC hdc = GetDC(hwnd);
     if (hdc == NULL) {
@@ -932,11 +1041,11 @@ void window_set_fullscreen(void* hwnd) {
 	HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 	GetMonitorInfo(hMonitor, &monitorInfo);
 	SetWindowLong(hwnd, GWL_STYLE, sm->savedState.style & ~(WS_CAPTION | WS_THICKFRAME));
-	SetWindowLong(hwnd, GWL_EXSTYLE, sm->savedState.exStyle & ~(WS_EX_DLGMODALFRAME | 
+	SetWindowLong(hwnd, GWL_EXSTYLE, sm->savedState.exStyle & ~(WS_EX_DLGMODALFRAME |
 		WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
 	SetWindowPos(hwnd, NULL,
-		monitorInfo.rcMonitor.left, 
-		monitorInfo.rcMonitor.top, 
+		monitorInfo.rcMonitor.left,
+		monitorInfo.rcMonitor.top,
 		monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
 		monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
 		SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
@@ -967,7 +1076,7 @@ void window_set_windowed(void* hwnd, int width, int height) {
 		sm->windowWidth = width;
 		sm->windowHeight = height;
 		SetWindowPos(hwnd, NULL,
-			sm->savedState.rect.left, 
+			sm->savedState.rect.left,
 			sm->savedState.rect.top,
 			width, height,
 			SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
@@ -1003,10 +1112,81 @@ void window_set_title(void* hwnd, const wchar_t* windowTitle) {
 	SetWindowTextW(hwnd, windowTitle);
 }
 
+static bool user_prefers_dark_mode() {
+	DWORD value = 1;
+	DWORD valueSize = sizeof(value);
+	LSTATUS status = RegGetValueW(
+		HKEY_CURRENT_USER,
+		L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+		L"AppsUseLightTheme",
+		RRF_RT_REG_DWORD,
+		NULL,
+		&value,
+		&valueSize
+	);
+	if (status != ERROR_SUCCESS) {
+		return false;
+	}
+	return value == 0;
+}
+
+static void apply_title_bar_mode(HWND hwnd, int mode) {
+	BOOL darkMode = FALSE;
+	switch (mode) {
+		case WINDOW_TITLE_BAR_MODE_DARK:
+			darkMode = TRUE;
+			break;
+		case WINDOW_TITLE_BAR_MODE_SYSTEM:
+			darkMode = user_prefers_dark_mode() ? TRUE : FALSE;
+			break;
+		case WINDOW_TITLE_BAR_MODE_LIGHT:
+		default:
+			darkMode = FALSE;
+			break;
+	}
+	HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+	if (FAILED(hr)) {
+		DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20, &darkMode, sizeof(darkMode));
+	}
+
+	// Force title-bar style redraw (needed for titlebar color change after window creation)
+	// NOTE: RedrawWindow() and DwmFlush() did not work here
+	BOOL isActive = (GetForegroundWindow() == hwnd || GetActiveWindow() == hwnd) ? TRUE : FALSE;
+	SendMessage(hwnd, WM_NCACTIVATE, (WPARAM)(!isActive), 0);
+	SendMessage(hwnd, WM_NCACTIVATE, (WPARAM)isActive, 0);
+}
+
+void window_set_title_bar_mode(void* hwnd, int mode) {
+	if (hwnd == NULL) {
+		return;
+	}
+	HWND window = (HWND)hwnd;
+	SharedMem* sm = (SharedMem*)GetWindowLongPtrA(window, GWLP_USERDATA);
+	if (sm != NULL) {
+		sm->titleBarMode = mode;
+	}
+
+	// This may be called from another thread. If so, send a message to the
+	// window's thread to update the title bar there. Calling the window API
+	// directly from a worker thread can deadlock.
+	DWORD windowThread = GetWindowThreadProcessId(window, NULL);
+	if (windowThread == GetCurrentThreadId()) {
+		apply_title_bar_mode(window, mode);
+	} else {
+		PostMessageA(window, UWM_SET_TITLE_BAR_MODE, (WPARAM)mode, 0);
+	}
+}
+
 void window_set_cursor_position(void* hwnd, int x, int y) {
 	SharedMem* sm = (SharedMem*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 	set_cursor_position_relative_to_window(sm, x, y);
 }
+
+#if KAIJU_ENABLE_FILEDROP
+void window_set_file_drop_enabled(void* hwnd, bool enabled) {
+	PostMessageA((HWND)hwnd, UWM_SET_FILE_DROP, enabled ? TRUE : FALSE, 0);
+}
+#endif
 
 void window_set_icon(void* hwnd, int width, int height, const uint8_t* pixelData) {
 	// Create BITMAPINFO structure for the icon

@@ -50,6 +50,7 @@ func setChildrenFontSize(elm *document.Element, size string, host *engine.Host) 
 	if elm.Stylizer.HasRule("font-size") {
 		return
 	}
+
 	if elm.IsText() {
 		lbl := elm.UI.ToLabel()
 		size := helpers.NumFromLengthWithFont(size, host.Window,
@@ -66,6 +67,7 @@ func (p FontSize) Process(panel *ui.Panel, elm *document.Element, values []rules
 	if len(values) != 1 {
 		return errors.New("FontSize requires exactly 1 value")
 	}
+
 	for _, child := range elm.Children {
 		setChildrenFontSize(child, values[0].Str, host)
 	}

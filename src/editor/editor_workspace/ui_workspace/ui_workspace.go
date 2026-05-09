@@ -196,7 +196,7 @@ func (w *UIWorkspace) applyRatio() {
 		r.SetX(r.Y())
 	}
 	if w.ratio.Y() <= 0 {
-		r.SetX(r.X())
+		r.SetY(r.X())
 	}
 	scaleW := drawW / r.X()
 	scaleH := drawH / r.Y()

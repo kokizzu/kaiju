@@ -922,7 +922,7 @@ uiCamera := host.Cameras.UI
 
 ```bash
 cd src
-go build -tags="debug,editor" -o ../ ./
+go build -tags="debug,editor,filedrop" -o ../ ./
 ```
 
 ### Build Tags

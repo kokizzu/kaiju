@@ -48,12 +48,14 @@ import (
 
 func (p BackgroundPositionX) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
 	if len(values) != 1 {
-		return fmt.Errorf("expected only one argument to background-position-x but got %d", len(values))
+		return fmt.Errorf("expected only one argument for background-position-x but got %d", len(values))
 	}
+
 	sd := panel.Base().ShaderData()
 	if sd == nil {
 		return nil
 	}
+
 	bgSize := panel.Background().Size()
 	x := helpers.NumFromLength(values[0].Str, host.Window)
 	sd.UVs.SetX(x / bgSize.X())

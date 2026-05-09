@@ -37,6 +37,7 @@
 package transform_tools
 
 import (
+	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
 	"kaijuengine.com/engine/collision"
@@ -52,19 +53,14 @@ const (
 )
 
 type RotationTool struct {
-	root           matrix.Transform
+	TransformGizmo
 	circles        [3]TranslationToolCircle
 	OnDragStart    events.EventWithArg[matrix.Vec4]
 	OnDragRotate   events.EventWithArg[matrix.Vec4]
 	OnDragEnd      events.EventWithArg[matrix.Vec4]
-	lastCamPos     matrix.Vec3
-	lastHit        matrix.Vec3
 	startDirection matrix.Vec3
 	lastDirection  matrix.Vec3
 	rotationDelta  matrix.Float
-	currentAxis    int
-	dragging       bool
-	visible        bool
 }
 
 type TranslationToolCircle struct {
@@ -112,8 +108,12 @@ func (a *TranslationToolCircle) Initialize(host *engine.Host, vec int) {
 func (t *RotationTool) Show(pos matrix.Vec3) {
 	t.visible = true
 	t.root.SetPosition(pos)
-	for i := range t.circles {
-		t.circles[i].shaderData.Activate()
+	if t.cameraMode == editor_controls.EditorCameraMode2d {
+		t.circles[2].shaderData.Activate()
+	} else {
+		for i := range t.circles {
+			t.circles[i].shaderData.Activate()
+		}
 	}
 	t.updateHitCircles()
 }
@@ -138,21 +138,16 @@ func (t *RotationTool) Update(host *engine.Host, snap bool, snapScale float32) b
 	return t.dragging
 }
 
+func (t *RotationTool) SetDimensions(mode editor_controls.EditorCameraMode) {
+	t.cameraMode = mode
+	if t.visible {
+		t.Hide()
+		t.Show(t.root.Position())
+	}
+}
+
 func (t *RotationTool) resize(cam cameras.Camera) {
-	camPos := cam.Position()
-	if camPos.Equals(t.lastCamPos) {
-		return
-	}
-	t.lastCamPos = camPos
-	viewMat := cam.View()
-	gizmoPos := t.root.Position().AsVec4()
-	viewPos := matrix.Mat4MultiplyVec4(viewMat, gizmoPos)
-	dist := matrix.Abs(viewPos.Z())
-	if dist <= matrix.FloatSmallestNonzero {
-		return
-	}
-	gizmoScale := dist * translationGizmoScale
-	t.root.SetScale(matrix.NewVec3(gizmoScale, gizmoScale, gizmoScale))
+	t.TransformGizmo.resize(cam)
 	t.updateHitCircles()
 }
 
@@ -160,7 +155,7 @@ func (t *RotationTool) hitCheck(host *engine.Host, cam cameras.Camera) {
 	if t.dragging {
 		return
 	}
-	ray := cam.RayCast(host.Window.Cursor.Position())
+	ray := cam.RayCast(t.cursorPosition(&host.Window.Cursor))
 	dist := matrix.FloatMax
 	target := -1
 	for i := range t.circles {
@@ -217,7 +212,7 @@ func (t *RotationTool) processDrag(host *engine.Host, cam cameras.Camera, snap b
 	if t.currentAxis == -1 {
 		return
 	}
-	c := host.Window.Cursor
+	c := &host.Window.Cursor
 	if c.Pressed() {
 		t.startDirection = t.lastHit.Subtract(t.root.Position()).Normal()
 		t.lastDirection = t.startDirection
@@ -239,7 +234,7 @@ func (t *RotationTool) processDrag(host *engine.Host, cam cameras.Camera, snap b
 		case matrix.Vz:
 			nml = matrix.NewVec3(0, 0, 1)
 		}
-		if hit, ok := cam.TryPlaneHit(c.Position(), rp, nml); ok {
+		if hit, ok := cam.TryPlaneHit(t.cursorPosition(c), rp, nml); ok {
 			dir := hit.Subtract(t.root.Position()).Normal()
 			angle := t.lastDirection.SignedAngle(dir, nml)
 			t.lastDirection = dir

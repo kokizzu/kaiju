@@ -192,12 +192,16 @@ func (g *GPULogicalDevice) freeTextureImpl(texId *TextureId) {
 
 func (g *GPULogicalDevice) remakeSwapChainImpl(window RenderingContainer, inst *GPUApplicationInstance, device *GPUDevice) error {
 	defer tracing.NewRegion("GPULogicalDevice.remakeSwapChainImpl").End()
-	// This will destroy the existing swap chain
-	device.CreateSwapChain(window, inst)
-	device.destroyGlobalUniforms()
+
+	// This will destroy and replace the existing swap chain when possible
+	_ = device.CreateSwapChain(window, inst)
 	if !g.SwapChain.IsValid() {
+		// minimized/invalid extents can leave the swap chain invalid
+		// Keep previous uniform handles intact until we can complete a valid rebuild
 		return nil // TODO:  Is this correct?
 	}
+	// Valid swap chain -> tear down old global uniforms before rebuilding
+	device.destroyGlobalUniforms()
 	slog.Info("recreated vulkan swap chain")
 	if err := g.SwapChain.SetupImageViews(device); err != nil {
 		return err
@@ -214,7 +218,9 @@ func (g *GPULogicalDevice) remakeSwapChainImpl(window RenderingContainer, inst *
 	if err := device.createGlobalUniforms(); err != nil {
 		return err
 	}
-	g.SwapChain.SetupSyncObjects(device)
+	if err := g.SwapChain.SetupSyncObjects(device); err != nil {
+		return err
+	}
 	passes := make([]*RenderPass, 0, len(g.renderPassCache))
 	for _, v := range g.renderPassCache {
 		passes = append(passes, v)

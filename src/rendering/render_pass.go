@@ -42,9 +42,6 @@ import (
 	"log/slog"
 	"math"
 	"strconv"
-
-	vk "kaijuengine.com/rendering/vulkan"
-	"kaijuengine.com/rendering/vulkan_const"
 )
 
 type RenderPassData struct {
@@ -91,6 +88,7 @@ type RenderPassAttachmentImageClear struct {
 	A       float32
 	Depth   float32
 	Stencil uint32
+	IsDepth bool
 }
 
 type RenderPassSubpassDescription struct {
@@ -136,7 +134,7 @@ type RenderPassDataCompiled struct {
 	AttachmentDescriptions []RenderPassAttachmentDescriptionCompiled
 	SubpassDescriptions    []RenderPassSubpassDescriptionCompiled
 	SubpassDependencies    []RenderPassSubpassDependencyCompiled
-	ImageClears            []vk.ClearValue
+	ImageClears            []RenderPassAttachmentImageClear
 	Subpass                []RenderPassSubpassDataCompiled
 	SkipCombine            bool
 }
@@ -181,7 +179,7 @@ type RenderPassAttachmentImageCompiled struct {
 }
 
 type RenderPassSubpassDescriptionCompiled struct {
-	PipelineBindPoint         vulkan_const.PipelineBindPoint
+	PipelineBindPoint         GPUPipelineBindPoint
 	ColorAttachmentReferences []RenderPassAttachmentReferenceCompiled
 	InputAttachmentReferences []RenderPassAttachmentReferenceCompiled
 	ResolveAttachments        []RenderPassAttachmentReferenceCompiled
@@ -191,17 +189,17 @@ type RenderPassSubpassDescriptionCompiled struct {
 
 type RenderPassAttachmentReferenceCompiled struct {
 	Attachment uint32
-	Layout     vulkan_const.ImageLayout
+	Layout     GPUImageLayout
 }
 
 type RenderPassSubpassDependencyCompiled struct {
 	SrcSubpass      uint32
 	DstSubpass      uint32
-	SrcStageMask    vk.PipelineStageFlags
-	DstStageMask    vk.PipelineStageFlags
-	SrcAccessMask   vk.AccessFlags
-	DstAccessMask   vk.AccessFlags
-	DependencyFlags vk.DependencyFlags
+	SrcStageMask    GPUPipelineStageFlags
+	DstStageMask    GPUPipelineStageFlags
+	SrcAccessMask   GPUAccessFlags
+	DstAccessMask   GPUAccessFlags
+	DependencyFlags GPUDependencyFlags
 }
 
 func NewRenderPassData(src string) (RenderPassData, error) {
@@ -221,64 +219,57 @@ func (d *RenderPassData) Compile(device *GPUDevice) RenderPassDataCompiled {
 		SubpassDependencies:    make([]RenderPassSubpassDependencyCompiled, len(d.SubpassDependencies)),
 		SkipCombine:            d.SkipCombine,
 	}
-	c.ImageClears = make([]vk.ClearValue, 0, len(d.AttachmentDescriptions))
+	c.ImageClears = make([]RenderPassAttachmentImageClear, 0, len(d.AttachmentDescriptions))
 	for i := range d.AttachmentDescriptions {
 		a := &c.AttachmentDescriptions[i]
 		b := &d.AttachmentDescriptions[i]
-		a.Format = b.FormatToVK(device)
-		a.Samples = b.SamplesToVK(&device.PhysicalDevice)
-		a.LoadOp = b.LoadOpToVK()
-		a.StoreOp = b.StoreOpToVK()
-		a.StencilLoadOp = b.StencilLoadOpToVK()
-		a.StencilStoreOp = b.StencilStoreOpToVK()
-		a.InitialLayout = b.InitialLayoutToVK()
-		a.FinalLayout = b.FinalLayoutToVK()
+		a.Format = b.FormatToGpu(device)
+		a.Samples = b.SamplesToGpu(&device.PhysicalDevice)
+		a.LoadOp = b.LoadOpToGpu()
+		a.StoreOp = b.StoreOpToGpu()
+		a.StencilLoadOp = b.StencilLoadOpToGpu()
+		a.StencilStoreOp = b.StencilStoreOpToGpu()
+		a.InitialLayout = b.InitialLayoutToGpu()
+		a.FinalLayout = b.FinalLayoutToGpu()
 		a.Image.MipLevels = b.Image.MipLevels
 		a.Image.LayerCount = b.Image.LayerCount
 		a.Image.Name = b.Image.Name
 		a.Image.ExistingImage = b.Image.ExistingImage
 		if !b.Image.IsInvalid() {
-			a.Image.Tiling = b.Image.TilingToVK()
-			a.Image.Filter = b.Image.FilterToVK()
-			a.Image.Usage = b.Image.UsageToVK()
-			a.Image.MemoryProperty = b.Image.MemoryPropertyToVK()
-			a.Image.Aspect = b.Image.AspectToVK()
-			a.Image.Access = b.Image.AccessToVK()
-			clear := vk.ClearValue{}
-			isDepth := a.IsDepthFormat()
-			bClear := b.Image.Clear
-			if isDepth {
-				clear.SetDepthStencil(bClear.Depth, bClear.Stencil)
-			} else {
-				clear.SetColor([]float32{bClear.R, bClear.G, bClear.B, bClear.A})
-			}
-			c.ImageClears = append(c.ImageClears, clear)
+			a.Image.Tiling = b.Image.TilingToGpu()
+			a.Image.Filter = b.Image.FilterToGpu()
+			a.Image.Usage = b.Image.UsageToGpu()
+			a.Image.MemoryProperty = b.Image.MemoryPropertyToGpu()
+			a.Image.Aspect = b.Image.AspectToGpu()
+			a.Image.Access = b.Image.AccessToGpu()
+			b.Image.Clear.IsDepth = a.IsDepthFormat()
+			c.ImageClears = append(c.ImageClears, b.Image.Clear)
 		}
 	}
 	c.Subpass = make([]RenderPassSubpassDataCompiled, 0, max(len(d.SubpassDependencies)-1, 0))
 	for i := range d.SubpassDescriptions {
 		a := &c.SubpassDescriptions[i]
 		b := &d.SubpassDescriptions[i]
-		a.PipelineBindPoint = b.PipelineBindPointToVK()
+		a.PipelineBindPoint = b.PipelineBindPointToGpu()
 		a.ColorAttachmentReferences = make([]RenderPassAttachmentReferenceCompiled, len(b.ColorAttachmentReferences))
 		for j := range b.ColorAttachmentReferences {
 			a.ColorAttachmentReferences[j].Attachment = b.ColorAttachmentReferences[j].Attachment
-			a.ColorAttachmentReferences[j].Layout = b.ColorAttachmentReferences[j].LayoutToVK().toVulkan()
+			a.ColorAttachmentReferences[j].Layout = b.ColorAttachmentReferences[j].LayoutToGpu()
 		}
 		a.InputAttachmentReferences = make([]RenderPassAttachmentReferenceCompiled, len(b.InputAttachmentReferences))
 		for j := range b.InputAttachmentReferences {
 			a.InputAttachmentReferences[j].Attachment = b.InputAttachmentReferences[j].Attachment
-			a.InputAttachmentReferences[j].Layout = b.InputAttachmentReferences[j].LayoutToVK().toVulkan()
+			a.InputAttachmentReferences[j].Layout = b.InputAttachmentReferences[j].LayoutToGpu()
 		}
 		a.ResolveAttachments = make([]RenderPassAttachmentReferenceCompiled, len(b.ResolveAttachments))
 		for j := range b.ResolveAttachments {
 			a.ResolveAttachments[j].Attachment = b.ResolveAttachments[j].Attachment
-			a.ResolveAttachments[j].Layout = b.ResolveAttachments[j].LayoutToVK().toVulkan()
+			a.ResolveAttachments[j].Layout = b.ResolveAttachments[j].LayoutToGpu()
 		}
 		a.DepthStencilAttachment = make([]RenderPassAttachmentReferenceCompiled, len(b.DepthStencilAttachment))
 		for j := range b.DepthStencilAttachment {
 			a.DepthStencilAttachment[j].Attachment = b.DepthStencilAttachment[j].Attachment
-			a.DepthStencilAttachment[j].Layout = b.DepthStencilAttachment[j].LayoutToVK().toVulkan()
+			a.DepthStencilAttachment[j].Layout = b.DepthStencilAttachment[j].LayoutToGpu()
 		}
 		a.PreserveAttachments = make([]uint32, len(b.PreserveAttachments))
 		copy(a.PreserveAttachments, b.PreserveAttachments)
@@ -312,11 +303,11 @@ func (d *RenderPassData) Compile(device *GPUDevice) RenderPassDataCompiled {
 		} else {
 			a.DstSubpass = uint32(b.DstSubpass)
 		}
-		a.SrcStageMask = b.SrcStageMaskToVK()
-		a.DstStageMask = b.DstStageMaskToVK()
-		a.SrcAccessMask = b.SrcAccessMaskToVK().toVulkan()
-		a.DstAccessMask = b.DstAccessMaskToVK().toVulkan()
-		a.DependencyFlags = b.DependencyFlagsToVK()
+		a.SrcStageMask = b.SrcStageMaskToGpu()
+		a.DstStageMask = b.DstStageMaskToGpu()
+		a.SrcAccessMask = b.SrcAccessMaskToGpu()
+		a.DstAccessMask = b.DstAccessMaskToGpu()
+		a.DependencyFlags = b.DependencyFlagsToGpu()
 	}
 	if len(c.Subpass) != len(d.SubpassDescriptions)-1 {
 		slog.Error("one or more of your d.SubpassDescriptions[1:] haven't been setup")
@@ -324,88 +315,88 @@ func (d *RenderPassData) Compile(device *GPUDevice) RenderPassDataCompiled {
 	return c
 }
 
-func (ai *RenderPassAttachmentImage) TilingToVK() GPUImageTiling {
-	return imageTilingToVK(ai.Tiling)
+func (ai *RenderPassAttachmentImage) TilingToGpu() GPUImageTiling {
+	return imageTilingToGpu(ai.Tiling)
 }
 
-func (ai *RenderPassAttachmentImage) FilterToVK() GPUFilter {
-	return filterToVK(ai.Filter)
+func (ai *RenderPassAttachmentImage) FilterToGpu() GPUFilter {
+	return filterToGpu(ai.Filter)
 }
 
-func (ai *RenderPassAttachmentImage) UsageToVK() GPUImageUsageFlags {
-	return imageUsageFlagsToVK(ai.Usage)
+func (ai *RenderPassAttachmentImage) UsageToGpu() GPUImageUsageFlags {
+	return imageUsageFlagsToGpu(ai.Usage)
 }
 
-func (ai *RenderPassAttachmentImage) MemoryPropertyToVK() GPUMemoryPropertyFlags {
-	return memoryPropertyFlagsToVK(ai.MemoryProperty)
+func (ai *RenderPassAttachmentImage) MemoryPropertyToGpu() GPUMemoryPropertyFlags {
+	return memoryPropertyFlagsToGpu(ai.MemoryProperty)
 }
 
-func (ai *RenderPassAttachmentImage) AspectToVK() GPUImageAspectFlags {
-	return imageAspectFlagsToVK(ai.Aspect)
+func (ai *RenderPassAttachmentImage) AspectToGpu() GPUImageAspectFlags {
+	return imageAspectFlagsToGpu(ai.Aspect)
 }
 
-func (ai *RenderPassAttachmentImage) AccessToVK() GPUAccessFlags {
-	return accessFlagsToVK(ai.Access)
+func (ai *RenderPassAttachmentImage) AccessToGpu() GPUAccessFlags {
+	return accessFlagsToGpu(ai.Access)
 }
 
-func (ad *RenderPassAttachmentDescription) FormatToVK(device *GPUDevice) GPUFormat {
-	return formatToVK(ad.Format, device)
+func (ad *RenderPassAttachmentDescription) FormatToGpu(device *GPUDevice) GPUFormat {
+	return formatToGpu(ad.Format, device)
 }
 
-func (ad *RenderPassAttachmentDescription) SamplesToVK(device *GPUPhysicalDevice) GPUSampleCountFlags {
-	return sampleCountToVK(ad.Samples, device)
+func (ad *RenderPassAttachmentDescription) SamplesToGpu(device *GPUPhysicalDevice) GPUSampleCountFlags {
+	return sampleCountToGpu(ad.Samples, device)
 }
 
-func (ad *RenderPassAttachmentDescription) LoadOpToVK() GPUAttachmentLoadOp {
-	return attachmentLoadOpToVK(ad.LoadOp)
+func (ad *RenderPassAttachmentDescription) LoadOpToGpu() GPUAttachmentLoadOp {
+	return attachmentLoadOpToGpu(ad.LoadOp)
 }
 
-func (ad *RenderPassAttachmentDescription) StoreOpToVK() GPUAttachmentStoreOp {
-	return attachmentStoreOpToVK(ad.StoreOp)
+func (ad *RenderPassAttachmentDescription) StoreOpToGpu() GPUAttachmentStoreOp {
+	return attachmentStoreOpToGpu(ad.StoreOp)
 }
 
-func (ad *RenderPassAttachmentDescription) StencilLoadOpToVK() GPUAttachmentLoadOp {
-	return attachmentLoadOpToVK(ad.StencilLoadOp)
+func (ad *RenderPassAttachmentDescription) StencilLoadOpToGpu() GPUAttachmentLoadOp {
+	return attachmentLoadOpToGpu(ad.StencilLoadOp)
 }
 
-func (ad *RenderPassAttachmentDescription) StencilStoreOpToVK() GPUAttachmentStoreOp {
-	return attachmentStoreOpToVK(ad.StencilStoreOp)
+func (ad *RenderPassAttachmentDescription) StencilStoreOpToGpu() GPUAttachmentStoreOp {
+	return attachmentStoreOpToGpu(ad.StencilStoreOp)
 }
 
-func (ad *RenderPassAttachmentDescription) InitialLayoutToVK() GPUImageLayout {
-	return imageLayoutToVK(ad.InitialLayout)
+func (ad *RenderPassAttachmentDescription) InitialLayoutToGpu() GPUImageLayout {
+	return imageLayoutToGpu(ad.InitialLayout)
 }
 
-func (ad *RenderPassAttachmentDescription) FinalLayoutToVK() GPUImageLayout {
-	return imageLayoutToVK(ad.FinalLayout)
+func (ad *RenderPassAttachmentDescription) FinalLayoutToGpu() GPUImageLayout {
+	return imageLayoutToGpu(ad.FinalLayout)
 }
 
-func (ad *RenderPassAttachmentReference) LayoutToVK() GPUImageLayout {
-	return imageLayoutToVK(ad.Layout)
+func (ad *RenderPassAttachmentReference) LayoutToGpu() GPUImageLayout {
+	return imageLayoutToGpu(ad.Layout)
 }
 
-func (ad *RenderPassSubpassDescription) PipelineBindPointToVK() vulkan_const.PipelineBindPoint {
-	return pipelineBindPointToVK(ad.PipelineBindPoint)
+func (ad *RenderPassSubpassDescription) PipelineBindPointToGpu() GPUPipelineBindPoint {
+	return pipelineBindPointToGpu(ad.PipelineBindPoint)
 }
 
-func (sd *RenderPassSubpassDependency) SrcStageMaskToVK() vk.PipelineStageFlags {
-	return pipelineStageFlagsToVK(sd.SrcStageMask)
+func (sd *RenderPassSubpassDependency) SrcStageMaskToGpu() GPUPipelineStageFlags {
+	return pipelineStageFlagsToGpu(sd.SrcStageMask)
 }
 
-func (sd *RenderPassSubpassDependency) DstStageMaskToVK() vk.PipelineStageFlags {
-	return pipelineStageFlagsToVK(sd.DstStageMask)
+func (sd *RenderPassSubpassDependency) DstStageMaskToGpu() GPUPipelineStageFlags {
+	return pipelineStageFlagsToGpu(sd.DstStageMask)
 }
 
-func (sd *RenderPassSubpassDependency) SrcAccessMaskToVK() GPUAccessFlags {
-	return accessFlagsToVK(sd.SrcAccessMask)
+func (sd *RenderPassSubpassDependency) SrcAccessMaskToGpu() GPUAccessFlags {
+	return accessFlagsToGpu(sd.SrcAccessMask)
 }
 
-func (sd *RenderPassSubpassDependency) DstAccessMaskToVK() GPUAccessFlags {
-	return accessFlagsToVK(sd.DstAccessMask)
+func (sd *RenderPassSubpassDependency) DstAccessMaskToGpu() GPUAccessFlags {
+	return accessFlagsToGpu(sd.DstAccessMask)
 }
 
-func (sd *RenderPassSubpassDependency) DependencyFlagsToVK() vk.DependencyFlags {
-	return dependencyFlagsToVK(sd.DependencyFlags)
+func (sd *RenderPassSubpassDependency) DependencyFlagsToGpu() GPUDependencyFlags {
+	return dependencyFlagsToGpu(sd.DependencyFlags)
 }
 
 func (p *RenderPassAttachmentDescriptionCompiled) IsDepthFormat() bool {

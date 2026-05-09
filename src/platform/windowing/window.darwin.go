@@ -187,6 +187,10 @@ func (w *Window) screenSizeMM() (int, int, error) {
 
 func (w *Window) invalidateMonitorCache() {}
 
+func (w *Window) monitorCount() int {
+	return int(C.cocoa_screen_count(w.instance))
+}
+
 func (w *Window) dotsPerMillimeter() float64 {
 	if w.instance == nil {
 		return 0
@@ -266,6 +270,10 @@ func (w *Window) setTitle(title string) {
 	}
 }
 
+// TODO: placeholder
+func (w *Window) setTitleBarMode(mode TitleBarMode) {}
+func (w *Window) getTitleBarMode() TitleBarMode     { return w.titleBarMode }
+
 func (w *Window) setCursorPosition(x, y int) {
 	// C.cocoa_set_cursor_position(w.handle, C.int(x), C.int(y))
 }
@@ -281,6 +289,9 @@ func (w *Window) setIcon(img image.Image) {
 	draw.Draw(rgba, rgba.Bounds(), img, bounds.Min, draw.Src)
 	C.cocoa_set_icon(w.instance, C.int(width), C.int(height), (*C.uint8_t)(&rgba.Pix[0]))
 }
+
+// TODO: placeholder
+func (w *Window) setFileDropEnabled(enabled bool) {}
 
 // App asset read (private)
 // On macOS, application assets are stored in the app bundle's Resources folder.

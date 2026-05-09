@@ -1189,34 +1189,80 @@ void window_set_file_drop_enabled(void* hwnd, bool enabled) {
 #endif
 
 void window_set_icon(void* hwnd, int width, int height, const uint8_t* pixelData) {
+	if (hwnd == NULL || pixelData == NULL || width <= 0 || height <= 0) {
+		return;
+	}
+
 	// Create BITMAPINFO structure for the icon
 	BITMAPINFO bmi = { 0 };
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = width;
 	bmi.bmiHeader.biHeight = -height; // Negative for top-down DIB
 	bmi.bmiHeader.biPlanes = 1;
-	bmi.bmiHeader.biBitCount = 32;
+	bmi.bmiHeader.biBitCount = 32;    // 32-bit
 	bmi.bmiHeader.biCompression = BI_RGB;
+
 	// Create a device context and allocate memory for the pixel data
 	HDC hdc = GetDC(NULL);
-	HDC memDC = CreateCompatibleDC(hdc);
-	HBITMAP colorBmp = CreateCompatibleBitmap(hdc, width, height);
-	// Set the pixel data into the bitmap
-	SetDIBits(memDC, colorBmp, 0, height, pixelData, &bmi, DIB_RGB_COLORS);
-	// Create ICONINFO structure
+	void* dibPixels = NULL;
+	HBITMAP colorBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &dibPixels, NULL, 0);
+	if (colorBmp == NULL || dibPixels == NULL) {
+		if (hdc != NULL) {
+			ReleaseDC(NULL, hdc);
+		}
+		return;
+	}
+
+	size_t pixelBytes = (size_t)width * (size_t)height * 4u;
+	memcpy(dibPixels, pixelData, pixelBytes);
+
+	HBITMAP maskBmp = NULL;
+	int maskStrideBytes = ((width + 31) / 32) * 4;
+	size_t maskBytes = (size_t)maskStrideBytes * (size_t)height;
+	uint8_t* maskBits = (uint8_t*)calloc(maskBytes, 1);
+	if (maskBits != NULL) {
+		// Win32 icons require a 1bpp AND-mask bitmap even if the color
+		// bitmap is 32-bit with alpha. All-zero bits means "do not mask out
+		// any pixels", so alpha in the color bitmap decides alpha.
+		maskBmp = CreateBitmap(width, height, 1, 1, maskBits);
+		free(maskBits);
+	} else {
+		// Allocation fallback: still pass a valid 1bpp mask handle so
+		// CreateIconIndirect gets valid icon inputs.
+		maskBmp = CreateBitmap(width, height, 1, 1, NULL);
+	}
+	if (maskBmp == NULL) {
+		DeleteObject(colorBmp);
+		ReleaseDC(NULL, hdc);
+		return;
+	}
+
 	ICONINFO ii = { 0 };
 	ii.fIcon = TRUE;
 	ii.hbmColor = colorBmp;
-	ii.hbmMask = CreateCompatibleBitmap(hdc, width, height);
-	// Create the icon
+	ii.hbmMask = maskBmp;
+
 	HICON icon = CreateIconIndirect(&ii);
-	// Set both large (taskbar) and small (title bar) icons
-	SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)icon);
-	SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)icon);
-	// Clean up
-	DeleteObject(ii.hbmMask);
+	if (icon == NULL) {
+		DeleteObject(maskBmp);
+		DeleteObject(colorBmp);
+		ReleaseDC(NULL, hdc);
+		return;
+	}
+
+	HICON oldBig = (HICON)SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)icon);
+	if (oldBig != NULL && oldBig != icon) {
+		/* cleanup previous icon */
+		DestroyIcon(oldBig);
+	}
+	HICON oldSmall = (HICON)SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)icon);
+	if (oldSmall != NULL && oldSmall != icon && oldSmall != oldBig) {
+		/* cleanup previous icon */
+		DestroyIcon(oldSmall);
+	}
+
+	DeleteObject(maskBmp);
 	DeleteObject(colorBmp);
-	DeleteDC(memDC);
 	ReleaseDC(NULL, hdc);
 }
 

@@ -228,7 +228,7 @@ func (p *Project) CompileRelease() {
 }
 
 // CompileGame will build all of the Go code for the project without launching
-// it. Internally, this will call #CompileDebug or #CompileRelease based on the
+// it. Internally, this will call [Project.CompileDebug] or [Project.CompileRelease] based on the
 // supplied buildMode.
 func (p *Project) CompileGame(buildMode GameBuildMode) {
 	switch buildMode {

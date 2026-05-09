@@ -23,7 +23,7 @@ kaiju/
 │   │   ├── host.go          # Central runtime mediator (Host)
 │   │   ├── entity.go        # Game entities with Transform
 │   │   ├── updater.go       # Update system for game loop
-│   │   └── physics_system.go # Physics integration
+│   │   └── physics_system.go # Graviton physics integration
 │   │
 │   ├── matrix/              # Custom math library (CRITICAL - see below)
 │   │   ├── vec2.go, vec3.go, vec4.go  # Vector types

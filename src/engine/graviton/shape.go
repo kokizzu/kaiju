@@ -25,8 +25,8 @@ type Shape struct {
 }
 
 func (s *Shape) SetBoxShape(extent matrix.Vec3) {
-	// Engine box shapes are OOBBs so rotated entity bodies match Bullet box
-	// behavior instead of collapsing to world-axis bounds.
+	// Engine box shapes are OOBBs so rotated entity bodies do not collapse to
+	// world-axis bounds.
 	s.SetOOBB(matrix.Vec3Zero(), extent, matrix.Mat3Identity())
 }
 

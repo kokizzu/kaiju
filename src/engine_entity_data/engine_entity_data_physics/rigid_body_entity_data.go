@@ -82,11 +82,25 @@ type RigidBodyEntityData struct {
 
 func (r RigidBodyEntityData) Init(e *engine.Entity, host *engine.Host) {
 	host.StartPhysics()
+	body := r.gravitonRigidBody(e)
+	host.Physics().AddEntityShape(e, float32(body.Mass.Mass), body.Shape())
+}
+
+func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity) *graviton.RigidBody {
 	shape := r.gravitonShape(e.Transform.Scale())
+	body := &graviton.RigidBody{}
+	body.Transform.SetupRawTransform()
+	body.Transform.SetPosition(e.Transform.Position())
+	body.Transform.SetRotation(e.Transform.Rotation())
+	// Scale is baked into the shape dimensions to match the existing behavior.
+	body.SetShape(shape)
 	if r.IsStatic {
-		r.Mass = 0
+		body.SetStatic()
+	} else {
+		mass := matrix.Float(r.Mass)
+		body.SetDynamic(mass, graviton.CalculateLocalInertia(shape, mass))
 	}
-	host.Physics().AddEntityShape(e, r.Mass, shape)
+	return body
 }
 
 func (r RigidBodyEntityData) gravitonShape(scale matrix.Vec3) graviton.Shape {

@@ -62,6 +62,7 @@ const (
 
 func init() {
 	pod.Register(Shape(0))
+	pod.Register(content_id.Mesh(""))
 	engine.RegisterEntityData(RigidBodyEntityData{})
 }
 

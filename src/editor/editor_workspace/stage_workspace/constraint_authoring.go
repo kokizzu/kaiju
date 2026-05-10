@@ -1,5 +1,5 @@
 /******************************************************************************/
-/* menu_bar_handler.go                                                        */
+/* constraint_authoring.go                                                     */
 /******************************************************************************/
 /*                            This file is part of                            */
 /*                                KAIJU ENGINE                                */
@@ -9,11 +9,6 @@
 /*                                                                            */
 /* Copyright (c) 2023-present Kaiju Engine authors (AUTHORS.md).              */
 /* Copyright (c) 2015-present Brent Farris.                                   */
-/*                                                                            */
-/* May all those that this source may reach be blessed by the LORD and find   */
-/* peace and joy in life.                                                     */
-/* Everyone who drinks of this water will be thirsty again; but whoever       */
-/* drinks of the water that I will give him shall never thirst; John 4:13-14  */
 /*                                                                            */
 /* Permission is hereby granted, free of charge, to any person obtaining a    */
 /* copy of this software and associated documentation files (the "Software"), */
@@ -34,46 +29,45 @@
 /* OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                              */
 /******************************************************************************/
 
-package menu_bar
+package stage_workspace
 
 import (
-	"kaijuengine.com/editor/editor_events"
-	"kaijuengine.com/editor/editor_settings"
-	"kaijuengine.com/editor/editor_stage_manager/editor_stage_view"
-	"kaijuengine.com/editor/memento"
-	"kaijuengine.com/editor/project"
-	"kaijuengine.com/editor/project/project_file_system"
+	"weak"
+
+	"kaijuengine.com/editor/editor_stage_manager"
+	"kaijuengine.com/editor/editor_stage_manager/data_binding_renderer"
+	"kaijuengine.com/platform/profiler/tracing"
 )
 
-type MenuBarHandler interface {
-	BlurInterface()
-	FocusInterface()
-	Settings() *editor_settings.Settings
-	Events() *editor_events.EditorEvents
-	History() *memento.History
-	Project() *project.Project
-	ProjectFileSystem() *project_file_system.FileSystem
-	StageWorkspaceSelected()
-	ContentWorkspaceSelected()
-	ShadingWorkspaceSelected()
-	VfxWorkspaceSelected()
-	UIWorkspaceSelected()
-	SettingsWorkspaceSelected()
-	StageView() *editor_stage_view.StageView
-	Build(buildMode project.GameBuildMode)
-	BuildAndRun(buildMode project.GameBuildMode)
-	BuildAndRunCurrentStage()
-	OpenCodeEditor()
-	CreateNewStage()
-	SaveCurrentStage()
-	CreateNewCamera()
-	CreateNewEntity()
-	CreateNewLight()
-	ConnectSelectedAsDistanceChain()
-	ConnectSelectedAsRope()
-	ConnectSelectedAsHingeChain()
-	CreatePluginProject(path string)
-	CreateHtmlUiFile(name string)
-	CreateCssStylesheetFile(name string)
-	SetGridVisible(visible bool)
+func (w *StageWorkspace) ConnectSelectedAsDistanceChain() {
+	w.connectSelectedAsConstraintChain(editor_stage_manager.ConstraintChainDistance)
+}
+
+func (w *StageWorkspace) ConnectSelectedAsRope() {
+	w.connectSelectedAsConstraintChain(editor_stage_manager.ConstraintChainRope)
+}
+
+func (w *StageWorkspace) ConnectSelectedAsHingeChain() {
+	w.connectSelectedAsConstraintChain(editor_stage_manager.ConstraintChainHinge)
+}
+
+func (w *StageWorkspace) connectSelectedAsConstraintChain(kind editor_stage_manager.ConstraintChainKind) {
+	defer tracing.NewRegion("StageWorkspace.connectSelectedAsConstraintChain").End()
+	man := w.stageView.Manager()
+	w.ed.History().BeginTransaction()
+	attachments := man.ConnectSelectedAsConstraintChain(kind)
+	for _, attachment := range attachments {
+		data_binding_renderer.Attached(attachment.Data, weak.Make(w.Host), man, attachment.Entity)
+		data_binding_renderer.ShowSpecific(attachment.Data, weak.Make(w.Host), attachment.Entity)
+		w.ed.History().Add(&constraintDataAttachHistory{
+			workspace: w,
+			Entity:    attachment.Entity,
+			Data:      attachment.Data,
+		})
+	}
+	if len(attachments) == 0 {
+		w.ed.History().CancelTransaction()
+		return
+	}
+	w.ed.History().CommitTransaction()
 }

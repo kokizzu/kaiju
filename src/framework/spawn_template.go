@@ -69,7 +69,8 @@ func SpawnTemplate(id string, host *engine.Host, parent *engine.Entity) (*engine
 		slog.Error("failed to deserialize the template data", "template", id, "error", err)
 		return nil, err
 	}
-	return spawnTemplateEntities(host, nil, &desc)
+	stages.RegenerateEntityIdsAndRewriteReferences(&desc)
+	return spawnTemplateEntities(host, parent, &desc)
 }
 
 // SpawnTemplateWithTransform loads an entity template asset identified by
@@ -99,17 +100,14 @@ func SpawnTemplateWithTransform(id string, host *engine.Host, parent *engine.Ent
 }
 
 func spawnTemplateEntities(host *engine.Host, parent *engine.Entity, desc *stages.EntityDescription) (*engine.Entity, error) {
-	e := engine.NewEntity(host.WorkGroup())
+	stage := stages.Stage{Entities: []stages.EntityDescription{*desc}}
+	res := stage.Load(host)
+	if len(res.Roots) == 0 {
+		return nil, nil
+	}
+	root := res.Roots[0]
 	if parent != nil {
-		e.SetParent(parent)
+		root.SetParent(parent)
 	}
-	if _, err := stages.SetupEntityFromDescription(e, host, desc); err != nil {
-		return e, err
-	}
-	for i := range desc.Children {
-		if _, err := spawnTemplateEntities(host, e, &desc.Children[i]); err != nil {
-			return e, err
-		}
-	}
-	return e, nil
+	return root, nil
 }

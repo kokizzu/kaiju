@@ -163,14 +163,7 @@ func (m *StageManager) AttachEntityData(e *StageEntity, g codegen.GeneratedType)
 func (m *StageManager) duplicateEntity(target *StageEntity, proj *project.Project) (*StageEntity, error) {
 	defer tracing.NewRegion("StageManager.duplicateEntity").End()
 	desc := m.entityToDescription(target)
-	var newId func(d *stages.EntityDescription)
-	newId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			newId(&d.Children[i])
-		}
-	}
-	newId(&desc)
+	regenerateEntityIdsAndRewriteReferences(&desc, proj)
 	return m.importEntityByDescription(m.host, proj, EntityToStageEntity(target.Parent), &desc)
 }
 
@@ -638,14 +631,7 @@ func (m *StageManager) SpawnTemplate(host *engine.Host, proj *project.Project, c
 	}
 	desc.Position = point
 	desc.TemplateId = cc.Id()
-	var generateId func(d *stages.EntityDescription)
-	generateId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			generateId(&d.Children[i])
-		}
-	}
-	generateId(&desc)
+	regenerateEntityIdsAndRewriteReferences(&desc, proj)
 	e, err := m.importEntityByDescription(host, proj, nil, &desc)
 	if err != nil {
 		slog.Error("failed to spawn the entity from entity template", "path", cc.Path, "error", err)
@@ -806,13 +792,6 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 		return err
 	}
 	m.ClearSelection()
-	var generateId func(d *stages.EntityDescription)
-	generateId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			generateId(&d.Children[i])
-		}
-	}
 	for i := range m.entities {
 		if m.entities[i].StageData.Description.TemplateId != templateId {
 			continue
@@ -821,7 +800,7 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 			continue
 		}
 		cpy := tpl
-		generateId(&cpy)
+		regenerateEntityIdsAndRewriteReferences(&cpy, proj)
 		t := m.entities[i].Transform
 		m.OnEntityDestroy.Execute(m.entities[i])
 		m.host.DestroyEntity(&m.entities[i].Entity)

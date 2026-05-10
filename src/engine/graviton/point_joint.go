@@ -123,6 +123,13 @@ func (j *PointJoint) SetWorldAnchors(worldAnchorA, worldAnchorB matrix.Vec3) {
 	WakeConstrainedBodies(j.BodyA, j.BodyB)
 }
 
+func (j *PointJoint) Constraint() *Constraint {
+	if j == nil {
+		return nil
+	}
+	return j.constraint
+}
+
 func (j *PointJoint) IsStretched() bool {
 	return j != nil && j.CurrentError().Length() > j.slop()
 }

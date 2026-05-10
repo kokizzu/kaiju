@@ -298,7 +298,7 @@ func TestStagePhysicsAddsDistanceJointBetweenEntities(t *testing.T) {
 	physics.Update(workGroup, threads, 0)
 }
 
-func TestStagePhysicsRemovesConstraintsOnEntityDestroy(t *testing.T) {
+func TestStagePhysicsAddsAllJointTypesBetweenEntities(t *testing.T) {
 	workGroup, _, cleanup := testStagePhysicsWorkers(t)
 	defer cleanup()
 
@@ -306,20 +306,100 @@ func TestStagePhysicsRemovesConstraintsOnEntityDestroy(t *testing.T) {
 	physics.Start()
 	defer physics.Destroy()
 
-	entityA := NewEntity(workGroup)
-	bodyA := newTestStageBody(entityA, graviton.RigidBodyTypeDynamic)
-	physics.AddEntity(entityA, bodyA)
+	entityA, entityB := addTestStageBodyPair(workGroup, &physics)
 
-	entityB := NewEntity(workGroup)
-	entityB.Transform.SetPosition(matrix.NewVec3(2, 0, 0))
-	bodyB := newTestStageBody(entityB, graviton.RigidBodyTypeDynamic)
-	physics.AddEntity(entityB, bodyB)
+	distance := physics.AddDistanceJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero())
+	rope := physics.AddRopeJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero())
+	point := physics.AddPointJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero())
+	hinge := physics.AddHingeJoint(
+		entityA,
+		entityB,
+		matrix.Vec3Zero(),
+		matrix.Vec3Zero(),
+		matrix.Vec3Right(),
+		matrix.Vec3Right(),
+	)
 
-	if physics.AddDistanceJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
-		t.Fatal("expected distance joint to be created")
+	if distance == nil || rope == nil || point == nil || hinge == nil {
+		t.Fatal("expected every stage joint type to be created")
 	}
-	if len(physics.World().Constraints()) != 1 {
-		t.Fatalf("expected 1 staged constraint before destroy, got %d", len(physics.World().Constraints()))
+	constraints := physics.World().Constraints()
+	if len(constraints) != 4 {
+		t.Fatalf("expected 4 staged constraints, got %d", len(constraints))
+	}
+	assertStageConstraint(t, constraints, distance.Constraint(), graviton.ConstraintTypeDistance)
+	assertStageConstraint(t, constraints, rope.Constraint(), graviton.ConstraintTypeRope)
+	assertStageConstraint(t, constraints, point.Constraint(), graviton.ConstraintTypePoint)
+	assertStageConstraint(t, constraints, hinge.Constraint(), graviton.ConstraintTypeHinge)
+	if len(physics.constraints) != 4 {
+		t.Fatalf("expected stage physics to track 4 constraints, got %d", len(physics.constraints))
+	}
+}
+
+func TestStagePhysicsAddsJointsToWorldAnchors(t *testing.T) {
+	workGroup, _, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entity := NewEntity(workGroup)
+	body := newTestStageBody(entity, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entity, body)
+
+	worldAnchor := matrix.NewVec3(3, 2, 1)
+	distance := physics.AddDistanceJointToWorld(entity, matrix.Vec3Zero(), worldAnchor)
+	rope := physics.AddRopeJoint(entity, nil, matrix.Vec3Zero(), worldAnchor)
+	point := physics.AddPointJointToWorld(entity, matrix.Vec3Zero(), worldAnchor)
+	hinge := physics.AddHingeJoint(
+		entity,
+		nil,
+		matrix.Vec3Zero(),
+		worldAnchor,
+		matrix.Vec3Right(),
+		matrix.Vec3Up(),
+	)
+
+	if distance == nil || rope == nil || point == nil || hinge == nil {
+		t.Fatal("expected every stage joint type to support a world anchor")
+	}
+	constraints := physics.World().Constraints()
+	if len(constraints) != 4 {
+		t.Fatalf("expected 4 staged body-world constraints, got %d", len(constraints))
+	}
+	for _, constraint := range constraints {
+		if !constraint.IsBodyWorld() {
+			t.Fatalf("expected body-world constraint, got bodyA %p bodyB %p", constraint.BodyA, constraint.BodyB)
+		}
+	}
+	if !matrix.Vec3ApproxTo(distance.WorldAnchorB(), worldAnchor, 0.0001) {
+		t.Fatalf("expected distance joint world anchor %v, got %v", worldAnchor, distance.WorldAnchorB())
+	}
+	if !matrix.Vec3ApproxTo(rope.WorldAnchorB(), worldAnchor, 0.0001) {
+		t.Fatalf("expected rope joint world anchor %v, got %v", worldAnchor, rope.WorldAnchorB())
+	}
+	if !matrix.Vec3ApproxTo(point.WorldAnchorB(), worldAnchor, 0.0001) {
+		t.Fatalf("expected point joint world anchor %v, got %v", worldAnchor, point.WorldAnchorB())
+	}
+	if !matrix.Vec3ApproxTo(hinge.WorldAnchorB(), worldAnchor, 0.0001) {
+		t.Fatalf("expected hinge joint world anchor %v, got %v", worldAnchor, hinge.WorldAnchorB())
+	}
+}
+
+func TestStagePhysicsRemovesBodyBodyConstraintsOnEitherEndpointDestroy(t *testing.T) {
+	workGroup, _, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entityA, entityB := addTestStageBodyPair(workGroup, &physics)
+
+	addAllTestStageJoints(t, &physics, entityA, entityB)
+	if len(physics.World().Constraints()) != 4 {
+		t.Fatalf("expected 4 staged constraints before destroy, got %d", len(physics.World().Constraints()))
 	}
 
 	entityA.OnDestroy.Execute()
@@ -331,20 +411,102 @@ func TestStagePhysicsRemovesConstraintsOnEntityDestroy(t *testing.T) {
 		t.Fatalf("expected entity destroy to clear stage constraint tracking, got %d", len(physics.constraints))
 	}
 
-	entityC := NewEntity(workGroup)
-	entityC.Transform.SetPosition(matrix.NewVec3(4, 0, 0))
-	bodyC := newTestStageBody(entityC, graviton.RigidBodyTypeDynamic)
-	physics.AddEntity(entityC, bodyC)
+	entityC := addTestStageBody(workGroup, &physics, matrix.NewVec3(4, 0, 0))
 
-	if physics.AddDistanceJoint(entityB, entityC, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
-		t.Fatal("expected second distance joint to be created")
-	}
+	addAllTestStageJoints(t, &physics, entityB, entityC)
 
 	entityC.OnDestroy.Execute()
 
 	if len(physics.World().Constraints()) != 0 {
 		t.Fatalf("expected second entity destroy to remove staged constraints, got %d", len(physics.World().Constraints()))
 	}
+}
+
+func TestStagePhysicsRemovesBodyWorldConstraintsOnOwningEntityDestroy(t *testing.T) {
+	workGroup, _, cleanup := testStagePhysicsWorkers(t)
+	defer cleanup()
+
+	physics := StagePhysics{}
+	physics.Start()
+	defer physics.Destroy()
+
+	entity := addTestStageBody(workGroup, &physics, matrix.Vec3Zero())
+	worldAnchor := matrix.NewVec3(0, 2, 0)
+
+	if physics.AddDistanceJoint(entity, nil, matrix.Vec3Zero(), worldAnchor) == nil {
+		t.Fatal("expected distance joint to world to be created")
+	}
+	if physics.AddRopeJointToWorld(entity, matrix.Vec3Zero(), worldAnchor) == nil {
+		t.Fatal("expected rope joint to world to be created")
+	}
+	if physics.AddPointJoint(entity, nil, matrix.Vec3Zero(), worldAnchor) == nil {
+		t.Fatal("expected point joint to world to be created")
+	}
+	if physics.AddHingeJointToWorld(entity, matrix.Vec3Zero(), worldAnchor, matrix.Vec3Right(), matrix.Vec3Right()) == nil {
+		t.Fatal("expected hinge joint to world to be created")
+	}
+	if len(physics.World().Constraints()) != 4 {
+		t.Fatalf("expected 4 staged constraints before destroy, got %d", len(physics.World().Constraints()))
+	}
+
+	entity.OnDestroy.Execute()
+
+	if len(physics.World().Constraints()) != 0 {
+		t.Fatalf("expected owning entity destroy to remove staged constraints, got %d", len(physics.World().Constraints()))
+	}
+	if len(physics.constraints) != 0 {
+		t.Fatalf("expected owning entity destroy to clear stage constraint tracking, got %d", len(physics.constraints))
+	}
+}
+
+func assertStageConstraint(t *testing.T, constraints []*graviton.Constraint, expected *graviton.Constraint, constraintType graviton.ConstraintType) {
+	t.Helper()
+	for _, constraint := range constraints {
+		if constraint == expected {
+			if constraint.Type != constraintType {
+				t.Fatalf("expected constraint type %d, got %d", constraintType, constraint.Type)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected staged constraint %p to be tracked by graviton system", expected)
+}
+
+func addTestStageBodyPair(workGroup *concurrent.WorkGroup, physics *StagePhysics) (*Entity, *Entity) {
+	entityA := addTestStageBody(workGroup, physics, matrix.Vec3Zero())
+	entityB := addTestStageBody(workGroup, physics, matrix.NewVec3(2, 0, 0))
+	return entityA, entityB
+}
+
+func addAllTestStageJoints(t *testing.T, physics *StagePhysics, entityA, entityB *Entity) {
+	t.Helper()
+	if physics.AddDistanceJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
+		t.Fatal("expected distance joint to be created")
+	}
+	if physics.AddRopeJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
+		t.Fatal("expected rope joint to be created")
+	}
+	if physics.AddPointJoint(entityA, entityB, matrix.Vec3Zero(), matrix.Vec3Zero()) == nil {
+		t.Fatal("expected point joint to be created")
+	}
+	if physics.AddHingeJoint(
+		entityA,
+		entityB,
+		matrix.Vec3Zero(),
+		matrix.Vec3Zero(),
+		matrix.Vec3Right(),
+		matrix.Vec3Right(),
+	) == nil {
+		t.Fatal("expected hinge joint to be created")
+	}
+}
+
+func addTestStageBody(workGroup *concurrent.WorkGroup, physics *StagePhysics, position matrix.Vec3) *Entity {
+	entity := NewEntity(workGroup)
+	entity.Transform.SetPosition(position)
+	body := newTestStageBody(entity, graviton.RigidBodyTypeDynamic)
+	physics.AddEntity(entity, body)
+	return entity
 }
 
 func newTestStageBody(entity *Entity, bodyType graviton.RigidBodyType) *graviton.RigidBody {

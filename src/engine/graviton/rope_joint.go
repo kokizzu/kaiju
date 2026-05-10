@@ -133,6 +133,13 @@ func (j *RopeJoint) SetMaxLength(maxLength matrix.Float) {
 	WakeConstrainedBodies(j.BodyA, j.BodyB)
 }
 
+func (j *RopeJoint) Constraint() *Constraint {
+	if j == nil {
+		return nil
+	}
+	return j.constraint
+}
+
 func (j *RopeJoint) IsStretched() bool {
 	return j != nil && j.CurrentLength() > j.MaxLength+j.slop()
 }

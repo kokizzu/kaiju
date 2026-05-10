@@ -218,6 +218,13 @@ func (j *HingeJoint) SetWorldAxis(worldAxis matrix.Vec3) {
 	WakeConstrainedBodies(j.BodyA, j.BodyB)
 }
 
+func (j *HingeJoint) Constraint() *Constraint {
+	if j == nil {
+		return nil
+	}
+	return j.constraint
+}
+
 func (j *HingeJoint) SetAngularLimits(minAngle, maxAngle matrix.Float) {
 	if j == nil {
 		return

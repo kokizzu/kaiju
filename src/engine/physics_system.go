@@ -167,6 +167,18 @@ func (p *StagePhysics) FindEntity(entity *Entity) (*StagePhysicsEntry, bool) {
 	return nil, false
 }
 
+func (p *StagePhysics) RigidBody(entity *Entity) (*graviton.RigidBody, bool) {
+	entry, ok := p.FindEntity(entity)
+	if !ok {
+		return nil, false
+	}
+	return entry.Body, true
+}
+
+func (p *StagePhysics) RigidBodies(entityA, entityB *Entity) (*graviton.RigidBody, *graviton.RigidBody, bool) {
+	return p.constraintBodies(entityA, entityB)
+}
+
 func (p *StagePhysics) Start() {
 	defer tracing.NewRegion("StagePhysics.StagePhysics").End()
 	if p.active {
@@ -273,6 +285,94 @@ func (p *StagePhysics) AddDistanceJoint(entityA, entityB *Entity, localAnchorA, 
 	return joint
 }
 
+func (p *StagePhysics) AddDistanceJointToWorld(entity *Entity, localAnchor, worldAnchor matrix.Vec3) *graviton.DistanceJoint {
+	defer tracing.NewRegion("StagePhysics.AddDistanceJointToWorld").End()
+	return p.AddDistanceJoint(entity, nil, localAnchor, worldAnchor)
+}
+
+func (p *StagePhysics) AddRopeJoint(entityA, entityB *Entity, localAnchorA, localAnchorB matrix.Vec3) *graviton.RopeJoint {
+	defer tracing.NewRegion("StagePhysics.AddRopeJoint").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add rope joint")
+		return nil
+	}
+	bodyA, bodyB, ok := p.constraintBodies(entityA, entityB)
+	if !ok {
+		return nil
+	}
+	joint := p.world.NewRopeJoint(bodyA, bodyB, localAnchorA, localAnchorB)
+	if joint == nil {
+		slog.Error("failed to add entity physics rope joint")
+		return nil
+	}
+	p.trackConstraint(entityA, entityB, joint.Constraint(), func() {
+		p.world.RemoveRopeJoint(joint)
+	})
+	return joint
+}
+
+func (p *StagePhysics) AddRopeJointToWorld(entity *Entity, localAnchor, worldAnchor matrix.Vec3) *graviton.RopeJoint {
+	defer tracing.NewRegion("StagePhysics.AddRopeJointToWorld").End()
+	return p.AddRopeJoint(entity, nil, localAnchor, worldAnchor)
+}
+
+func (p *StagePhysics) AddPointJoint(entityA, entityB *Entity, localAnchorA, localAnchorB matrix.Vec3) *graviton.PointJoint {
+	defer tracing.NewRegion("StagePhysics.AddPointJoint").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add point joint")
+		return nil
+	}
+	bodyA, bodyB, ok := p.constraintBodies(entityA, entityB)
+	if !ok {
+		return nil
+	}
+	joint := p.world.NewPointJoint(bodyA, bodyB, localAnchorA, localAnchorB)
+	if joint == nil {
+		slog.Error("failed to add entity physics point joint")
+		return nil
+	}
+	p.trackConstraint(entityA, entityB, joint.Constraint(), func() {
+		p.world.RemovePointJoint(joint)
+	})
+	return joint
+}
+
+func (p *StagePhysics) AddPointJointToWorld(entity *Entity, localAnchor, worldAnchor matrix.Vec3) *graviton.PointJoint {
+	defer tracing.NewRegion("StagePhysics.AddPointJointToWorld").End()
+	return p.AddPointJoint(entity, nil, localAnchor, worldAnchor)
+}
+
+func (p *StagePhysics) AddHingeJoint(
+	entityA, entityB *Entity,
+	localAnchorA, localAnchorB, localAxisA, localAxisB matrix.Vec3,
+) *graviton.HingeJoint {
+	defer tracing.NewRegion("StagePhysics.AddHingeJoint").End()
+	if !p.active {
+		slog.Error("stage physics has not started, can not add hinge joint")
+		return nil
+	}
+	bodyA, bodyB, ok := p.constraintBodies(entityA, entityB)
+	if !ok {
+		return nil
+	}
+	joint := p.world.NewHingeJoint(bodyA, bodyB, localAnchorA, localAnchorB, localAxisA, localAxisB)
+	if joint == nil {
+		slog.Error("failed to add entity physics hinge joint")
+		return nil
+	}
+	p.trackConstraint(entityA, entityB, joint.Constraint(), func() {
+		p.world.RemoveHingeJoint(joint)
+	})
+	return joint
+}
+
+func (p *StagePhysics) AddHingeJointToWorld(
+	entity *Entity, localAnchor, worldAnchor, localAxis, worldAxis matrix.Vec3,
+) *graviton.HingeJoint {
+	defer tracing.NewRegion("StagePhysics.AddHingeJointToWorld").End()
+	return p.AddHingeJoint(entity, nil, localAnchor, worldAnchor, localAxis, worldAxis)
+}
+
 func (p *StagePhysics) AddEntityShape(entity *Entity, mass float32, shape graviton.Shape) {
 	defer tracing.NewRegion("StagePhysics.AddEntityShape").End()
 	t := &entity.Transform
@@ -321,17 +421,20 @@ func (p *StagePhysics) Update(workGroup *concurrent.WorkGroup, threads *concurre
 }
 
 func (p *StagePhysics) constraintBodies(entityA, entityB *Entity) (*graviton.RigidBody, *graviton.RigidBody, bool) {
-	entryA, ok := p.FindEntity(entityA)
+	bodyA, ok := p.RigidBody(entityA)
 	if !ok {
 		slog.Error("failed to add entity physics constraint, first entity has no staged body")
 		return nil, nil, false
 	}
-	entryB, ok := p.FindEntity(entityB)
+	if entityB == nil {
+		return bodyA, nil, true
+	}
+	bodyB, ok := p.RigidBody(entityB)
 	if !ok {
 		slog.Error("failed to add entity physics constraint, second entity has no staged body")
 		return nil, nil, false
 	}
-	return entryA.Body, entryB.Body, true
+	return bodyA, bodyB, true
 }
 
 func (p *StagePhysics) trackConstraint(entityA, entityB *Entity, constraint *graviton.Constraint, remove func()) {
@@ -343,8 +446,12 @@ func (p *StagePhysics) trackConstraint(entityA, entityB *Entity, constraint *gra
 		remove:     remove,
 	})
 	removeConstraint := func() { p.removeConstraintByTrackedEntry(constraint, entityA, entityB, idx) }
-	entityA.OnDestroy.Add(removeConstraint)
-	entityB.OnDestroy.Add(removeConstraint)
+	if entityA != nil {
+		entityA.OnDestroy.Add(removeConstraint)
+	}
+	if entityB != nil {
+		entityB.OnDestroy.Add(removeConstraint)
+	}
 }
 
 func (p *StagePhysics) removeConstraintByTrackedEntry(
@@ -380,7 +487,7 @@ func (e *stagePhysicsConstraintEntry) matches(constraint *graviton.Constraint, e
 		return false
 	}
 	if constraint != nil && e.Constraint == constraint {
-		return true
+		return e.EntityA == entityA && e.EntityB == entityB
 	}
 	return e.EntityA == entityA && e.EntityB == entityB
 }

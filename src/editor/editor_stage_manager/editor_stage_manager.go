@@ -177,6 +177,7 @@ func (m *StageManager) AddEntityWithId(id, name string, point matrix.Vec3) *Stag
 	defer tracing.NewRegion("StageManager.AddEntityWithId").End()
 	e := &StageEntity{}
 	e.Init(m.host.WorkGroup())
+	m.host.SetEntityId(&e.Entity, engine.EntityId(id))
 	e.SetName(name)
 	e.StageData.Description.Id = id
 	e.Transform.SetPosition(point)

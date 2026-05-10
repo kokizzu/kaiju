@@ -62,8 +62,9 @@ type Stage struct {
 }
 
 type LoadResult struct {
-	Roots    []*engine.Entity
-	Entities []*engine.Entity
+	Roots        []*engine.Entity
+	Entities     []*engine.Entity
+	EntitiesById map[engine.EntityId]*engine.Entity
 }
 
 type StageJson struct {
@@ -264,12 +265,20 @@ func EntityDescriptionArchiveDeserializer(rawData []byte) (EntityDescription, er
 }
 
 func (s *Stage) Load(host *engine.Host) LoadResult {
-	res := LoadResult{}
+	res := LoadResult{
+		EntitiesById: make(map[engine.EntityId]*engine.Entity),
+	}
 	entityBindings := []func(){}
 	var proc func(se *EntityDescription, parent *engine.Entity)
 	proc = func(se *EntityDescription, parent *engine.Entity) {
 		e := engine.NewEntity(host.WorkGroup())
 		res.Entities = append(res.Entities, e)
+		if se.Id != "" {
+			id := engine.EntityId(se.Id)
+			if host.SetEntityId(e, id) {
+				res.EntitiesById[id] = e
+			}
+		}
 		if parent != nil {
 			e.SetParent(parent)
 		} else {

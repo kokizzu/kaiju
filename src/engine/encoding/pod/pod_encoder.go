@@ -225,7 +225,9 @@ func (e Encoder) encodeFields(val reflect.Value, typeLookup, fieldLookup []strin
 	default:
 		switch val.Kind() {
 		case reflect.Int:
-			val = reflect.ValueOf(int32(val.Interface().(int)))
+			val = reflect.ValueOf(int32(val.Int()))
+		case reflect.Uint:
+			val = reflect.ValueOf(uint32(val.Uint()))
 		case reflect.String:
 			return klib.BinaryWriteString(e.w, val.String())
 		}

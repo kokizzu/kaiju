@@ -73,6 +73,31 @@ func TestSimpleTypes(t *testing.T) {
 	}
 }
 
+func TestNamedIntType(t *testing.T) {
+	type NamedInt int
+	type NamedIntStruct struct {
+		Value NamedInt
+	}
+	Register(NamedInt(0))
+	Register(NamedIntStruct{})
+	defer Unregister(NamedInt(0))
+	defer Unregister(NamedIntStruct{})
+	original := NamedIntStruct{Value: NamedInt(7)}
+	buf := bytes.Buffer{}
+	encoder := NewEncoder(&buf)
+	if err := encoder.Encode(original); err != nil {
+		t.Fatalf("encoding failed: %v", err)
+	}
+	var decoded NamedIntStruct
+	decoder := NewDecoder(bytes.NewReader(buf.Bytes()))
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("decoding failed: %v", err)
+	}
+	if decoded != original {
+		t.Errorf("decoded value mismatch: got %v, want %v", decoded, original)
+	}
+}
+
 // AllPrimitiveTypes tests all supported primitive types
 func TestAllPrimitiveTypes(t *testing.T) {
 	type AllTypes struct {

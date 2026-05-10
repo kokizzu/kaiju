@@ -61,6 +61,7 @@ const (
 )
 
 func init() {
+	pod.Register(Shape(0))
 	engine.RegisterEntityData(RigidBodyEntityData{})
 }
 
@@ -85,6 +86,10 @@ func (r RigidBodyEntityData) Init(e *engine.Entity, host *engine.Host) {
 	host.StartPhysics()
 	body := r.gravitonRigidBody(e, host)
 	host.Physics().AddEntity(e, body)
+}
+
+func (r RigidBodyEntityData) EntityDataInitPhase() engine.EntityDataPhase {
+	return engine.EntityDataPhasePhysicsBody
 }
 
 func (r RigidBodyEntityData) gravitonRigidBody(e *engine.Entity, host *engine.Host) *graviton.RigidBody {

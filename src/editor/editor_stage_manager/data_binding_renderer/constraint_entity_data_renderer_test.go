@@ -130,12 +130,13 @@ func TestConstraintRendererMovingOwnerOrTargetUpdatesAnchors(t *testing.T) {
 }
 
 func TestConstraintRendererDataChangeAndInvalidTargetRefreshes(t *testing.T) {
-	host, manager, owner, _ := newConstraintRendererTestStage()
+	host, manager, owner, target := newConstraintRendererTestStage()
 	renderer := &ConstraintEntityDataRenderer{
 		Gizmos: make(map[*entity_data_binding.EntityDataEntry]*constraintGizmo),
 	}
 	entry := constraintTestEntry(&engine_entity_data_physics.PointJointEntityData{
 		ConnectedEntityId: engine.EntityId("missing"),
+		LocalAnchorA:      matrix.NewVec3(1, 0, 0),
 		TargetAnchorB:     matrix.NewVec3(0, 1, 0),
 	})
 	renderer.Attached(host, manager, owner, entry)
@@ -146,11 +147,80 @@ func TestConstraintRendererDataChangeAndInvalidTargetRefreshes(t *testing.T) {
 	if g.link.(*shader_data_registry.ShaderDataEdTransformWire).Color != matrix.ColorOrange() {
 		t.Fatal("invalid target should use warning color")
 	}
+	oldA := g.lastAnchorA
 	oldB := g.lastAnchorB
+	entry.SetFieldByName("LocalAnchorA", matrix.NewVec3(2, 0, 0))
+	renderer.Update(host, owner, entry)
+	if g.lastAnchorA.Equals(oldA) {
+		t.Fatal("local anchor edits should refresh anchor A")
+	}
 	entry.SetFieldByName("TargetAnchorB", matrix.NewVec3(0, 4, 0))
 	renderer.Update(host, owner, entry)
 	if g.lastAnchorB.Equals(oldB) {
 		t.Fatal("data field changes should refresh anchor B")
+	}
+
+	entry.SetFieldByName("ConnectedEntityId", engine.EntityId(target.StageData.Description.Id))
+	renderer.Update(host, owner, entry)
+	if g.invalidTarget || g.target != target {
+		t.Fatal("target ID edits should resolve and refresh the target")
+	}
+	if g.link.(*shader_data_registry.ShaderDataEdTransformWire).Color != matrix.ColorGreen() {
+		t.Fatal("valid target should restore normal gizmo color")
+	}
+	entry.SetFieldByName("ConnectedEntityId", engine.EntityId("still-missing"))
+	renderer.Update(host, owner, entry)
+	if !g.invalidTarget {
+		t.Fatal("editing target ID to a missing entity should restore warning state")
+	}
+}
+
+func TestConstraintRendererHingeAxisAndLimitEditsRefresh(t *testing.T) {
+	host, manager, owner, target := newConstraintRendererTestStage()
+	renderer := &ConstraintEntityDataRenderer{
+		Gizmos: make(map[*entity_data_binding.EntityDataEntry]*constraintGizmo),
+	}
+	entry := constraintTestEntry(&engine_entity_data_physics.HingeJointEntityData{
+		ConnectedEntityId: engine.EntityId(target.StageData.Description.Id),
+		HingeAxis:         matrix.Vec3Right(),
+		EnableLimits:      false,
+	})
+	renderer.Attached(host, manager, owner, entry)
+	g := renderer.Gizmos[entry]
+	if g == nil || g.axis == nil {
+		t.Fatal("expected hinge axis drawing")
+	}
+	if g.arc != nil {
+		t.Fatal("limits disabled should not create an arc")
+	}
+
+	oldAxis := g.lastAxis
+	entry.SetFieldByName("HingeAxis", matrix.Vec3Up())
+	renderer.Update(host, owner, entry)
+	if g.lastAxis.Equals(oldAxis) {
+		t.Fatal("axis edits should refresh the hinge axis")
+	}
+
+	entry.SetFieldByName("EnableLimits", true)
+	entry.SetFieldByName("MinAngleDegrees", matrix.Float(-20))
+	entry.SetFieldByName("MaxAngleDegrees", matrix.Float(60))
+	renderer.Update(host, owner, entry)
+	if g.arc == nil {
+		t.Fatal("enabling limits should create a limit arc")
+	}
+	oldArc := g.arc
+	oldArcKey := g.arcKey
+	entry.SetFieldByName("MaxAngleDegrees", matrix.Float(90))
+	renderer.Update(host, owner, entry)
+	if g.arc == nil || g.arc == oldArc || g.arcKey == oldArcKey {
+		t.Fatal("limit angle edits should rebuild the limit arc")
+	}
+
+	arcToDestroy := g.arc
+	entry.SetFieldByName("EnableLimits", false)
+	renderer.Update(host, owner, entry)
+	if g.arc != nil || !arcToDestroy.IsDestroyed() {
+		t.Fatal("disabling limits should destroy and clear the limit arc")
 	}
 }
 

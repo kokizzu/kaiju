@@ -154,6 +154,11 @@ func (dui *WorkspaceDetailsUI) setupFuncs() map[string]func(*document.Element) {
 		"contentIdDrop":        dui.contentIdDrop,
 		"contentIdDragEnter":   dui.contentIdDragEnter,
 		"contentIdDragExit":    dui.contentIdDragExit,
+		"clickSelectEntityId":  dui.clickSelectEntityId,
+		"clearEntityId":        dui.clearEntityId,
+		"entityIdDrop":         dui.entityIdDrop,
+		"entityIdDragEnter":    dui.entityIdDragEnter,
+		"entityIdDragExit":     dui.entityIdDragExit,
 		"onRightClick":         dui.onRightClick,
 	}
 }
@@ -185,6 +190,8 @@ func (dui *WorkspaceDetailsUI) setup(w *StageWorkspace) {
 	man := w.stageView.Manager()
 	man.OnEntitySelected.Add(dui.entitySelected)
 	man.OnEntityDeselected.Add(dui.entityDeselected)
+	man.OnEntitySpawn.Add(func(*editor_stage_manager.StageEntity) { dui.reloadTargetedValues() })
+	man.OnEntityDestroy.Add(func(*editor_stage_manager.StageEntity) { dui.reloadTargetedValues() })
 	w.ed.Project().OnEntityDataUpdated.Add(dui.reloadDataList)
 	dui.reloadDataList(w.ed.Project().EntityData())
 }
@@ -456,6 +463,10 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 		if len(fields[i].Children) > 8 {
 			contentIdInput = fields[i].Children[8]
 		}
+		var entityIdInput *document.Element
+		if len(fields[i].Children) > 9 {
+			entityIdInput = fields[i].Children[9]
+		}
 		nameSpan.InnerLabel().SetText(g.Fields[i].Name)
 		fg := &g.Gen.FieldGens[i]
 		v := reflect.ValueOf(g.BoundData).Elem().Field(i)
@@ -497,6 +508,12 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 					str = fmt.Sprintf("empty (%s)", g.Fields[i].Type)
 				}
 				child.InnerLabel().SetText(str)
+			}
+		} else if g.Fields[i].IsEntityId() && entityIdInput != nil {
+			entityIdInput.UI.Show()
+			child := entityIdInput.Children[0]
+			valReload = func() {
+				dui.setEntityIdInputValue(child, engine.EntityId(g.FieldString(i)))
 			}
 		} else if g.Fields[i].IsInput() {
 			textInput.UI.Show()
@@ -586,6 +603,137 @@ func (dui *WorkspaceDetailsUI) clickSelectContentId(e *document.Element) {
 		}, w.ed.FocusInterface)
 }
 
+func (dui *WorkspaceDetailsUI) clickSelectEntityId(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.selectEntityId").End()
+	w := dui.workspace.Value()
+	w.ed.BlurInterface()
+	options := []context_menu.ContextMenuOption{{
+		Label: "None",
+		Call: func() {
+			dui.setEntityIdInputValue(e, "")
+			dui.commonChangeData(e, false)
+		},
+	}}
+	for _, entity := range w.stageView.Manager().Entities() {
+		if entity == nil || entity.IsDeleted() {
+			continue
+		}
+		id := engine.EntityId(entity.StageData.Description.Id)
+		label := fmt.Sprintf("%s%s", strings.Repeat("  ", entity.Depth()), entityIdDisplayName(entity.Name(), id))
+		options = append(options, context_menu.ContextMenuOption{
+			Label: label,
+			Call: func() {
+				dui.setEntityIdInputValue(e, id)
+				dui.commonChangeData(e, false)
+			},
+		})
+	}
+	context_menu.Show(w.Host, options, w.Host.Window.Cursor.ScreenPosition(), w.ed.FocusInterface)
+}
+
+func (dui *WorkspaceDetailsUI) clearEntityId(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.clearEntityId").End()
+	target := entityIdInputElement(e)
+	if target == nil {
+		return
+	}
+	dui.setEntityIdInputValue(target, "")
+	dui.commonChangeData(target, false)
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDrop(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDrop").End()
+	w := dui.workspace.Value()
+	w.Doc.SetElementClasses(e, "dataEntityId")
+	id, ok := dui.firstDraggedEntityId()
+	if !ok {
+		return
+	}
+	dui.setEntityIdInputValue(e, id)
+	dui.commonChangeData(e, false)
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDragEnter(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDragEnter").End()
+	if _, ok := dui.firstDraggedEntityId(); !ok {
+		return
+	}
+	dui.workspace.Value().Doc.SetElementClasses(e, "dataEntityId", "dragHover")
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDragExit(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDragExit").End()
+	w := dui.workspace.Value()
+	if id := engine.EntityId(e.Attribute("data-entityid")); id != "" {
+		if entity, ok := w.stageView.Manager().EntityById(string(id)); !ok || entity.IsDeleted() {
+			w.Doc.SetElementClasses(e, "dataEntityId", "dataEntityIdInvalid")
+			return
+		}
+	}
+	w.Doc.SetElementClasses(e, "dataEntityId")
+}
+
+func (dui *WorkspaceDetailsUI) firstDraggedEntityId() (engine.EntityId, bool) {
+	dd, ok := windowing.DragData().(HierarchyEntityDragData)
+	if !ok {
+		return "", false
+	}
+	man := dui.workspace.Value().stageView.Manager()
+	for _, id := range dd.ids {
+		entity, ok := man.EntityById(id)
+		if ok && !entity.IsDeleted() {
+			return engine.EntityId(id), true
+		}
+	}
+	return "", false
+}
+
+func (dui *WorkspaceDetailsUI) setEntityIdInputValue(e *document.Element, id engine.EntityId) {
+	w := dui.workspace.Value()
+	e.SetAttribute("data-entityid", string(id))
+	label, valid := dui.entityIdLabel(id)
+	e.InnerLabel().SetText(label)
+	if valid {
+		w.Doc.SetElementClasses(e, "dataEntityId")
+	} else {
+		w.Doc.SetElementClasses(e, "dataEntityId", "dataEntityIdInvalid")
+	}
+}
+
+func (dui *WorkspaceDetailsUI) entityIdLabel(id engine.EntityId) (string, bool) {
+	if id == "" {
+		return "empty (Entity)", true
+	}
+	entity, ok := dui.workspace.Value().stageView.Manager().EntityById(string(id))
+	if !ok || entity.IsDeleted() {
+		return fmt.Sprintf("missing (%s)", id), false
+	}
+	return entityIdDisplayName(entity.Name(), id), true
+}
+
+func entityIdDisplayName(name string, id engine.EntityId) string {
+	return fmt.Sprintf("%s (%s)", name, id)
+}
+
+func entityIdInputElement(e *document.Element) *document.Element {
+	if e == nil {
+		return nil
+	}
+	if e.HasClass("dataEntityId") {
+		return e
+	}
+	parent := e.Parent.Value()
+	if parent == nil {
+		return nil
+	}
+	for _, child := range parent.Children {
+		if child.HasClass("dataEntityId") {
+			return child
+		}
+	}
+	return nil
+}
+
 func (dui *WorkspaceDetailsUI) contentIdDrop(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.contentIdDrop").End()
 	w := dui.workspace.Value()
@@ -626,6 +774,12 @@ func (dui *WorkspaceDetailsUI) contentIdDragExit(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.contentIdDragExit").End()
 	w := dui.workspace.Value()
 	w.Doc.SetElementClasses(e, "dataContentId")
+}
+
+func (dui *WorkspaceDetailsUI) reloadTargetedValues() {
+	for _, reload := range dui.TargetedElementValueReload {
+		reload()
+	}
 }
 
 func (dui *WorkspaceDetailsUI) commonChangeData(e *document.Element, isShaderData bool) bool {
@@ -703,6 +857,8 @@ func reflectAssignChanges(e *document.Element, v reflect.Value) bool {
 	case ui.ElementTypePanel:
 		if e.HasClass("dataContentId") {
 			inputText = e.InnerLabel().Text()
+		} else if e.HasClass("dataEntityId") {
+			inputText = e.Attribute("data-entityid")
 		}
 	}
 	switch v.Kind() {

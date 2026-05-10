@@ -116,6 +116,10 @@ func (m *StageManager) NewStage() {
 func (m *StageManager) IsNew() bool     { return m.stageId == "" }
 func (m *StageManager) StageId() string { return m.stageId }
 
+func (m *StageManager) Entities() []*StageEntity {
+	return slices.Clone(m.entities)
+}
+
 func (m *StageManager) SetStageId(name string, cache *content_database.Cache) error {
 	defer tracing.NewRegion("StageManager.SetStageId").End()
 	newId := uuid.NewString()

@@ -769,7 +769,6 @@ func (dui *WorkspaceDetailsUI) reload() {
 		dui.detailsArea.UI.Show()
 		dui.detailsArea.UI.Hide()
 	}
-	dui.detailsArea.UI.Clean()
 }
 
 func (dui *WorkspaceDetailsUI) pasteEntityDataAsNew(e *document.Element) {

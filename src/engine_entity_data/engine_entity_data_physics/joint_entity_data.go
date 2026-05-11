@@ -31,8 +31,8 @@ type jointEntityDataCommon struct {
 
 type DistanceJointEntityData struct {
 	ConnectedEntityId engine.EntityId
-	LocalAnchorA      matrix.Vec3
-	TargetAnchorB     matrix.Vec3
+	LocalAnchorA      matrix.Vec3  // Local body anchor on this entity.
+	TargetAnchorB     matrix.Vec3  // Local target anchor, or fixed world anchor when ConnectedEntityId is empty.
 	Stiffness         matrix.Float `default:"1"`
 	Bias              matrix.Float `default:"0.2"`
 	Correction        matrix.Float `default:"0.8"`
@@ -48,8 +48,8 @@ type DistanceJointEntityData struct {
 
 type RopeJointEntityData struct {
 	ConnectedEntityId engine.EntityId
-	LocalAnchorA      matrix.Vec3
-	TargetAnchorB     matrix.Vec3
+	LocalAnchorA      matrix.Vec3  // Local body anchor on this entity.
+	TargetAnchorB     matrix.Vec3  // Local target anchor, or fixed world anchor when ConnectedEntityId is empty.
 	Stiffness         matrix.Float `default:"1"`
 	Bias              matrix.Float `default:"0.2"`
 	Correction        matrix.Float `default:"0.8"`
@@ -65,8 +65,8 @@ type RopeJointEntityData struct {
 
 type PointJointEntityData struct {
 	ConnectedEntityId engine.EntityId
-	LocalAnchorA      matrix.Vec3
-	TargetAnchorB     matrix.Vec3
+	LocalAnchorA      matrix.Vec3  // Local body anchor on this entity; point joints keep this coincident with TargetAnchorB.
+	TargetAnchorB     matrix.Vec3  // Local target anchor, or fixed world anchor when ConnectedEntityId is empty.
 	Stiffness         matrix.Float `default:"1"`
 	Bias              matrix.Float `default:"0.2"`
 	Correction        matrix.Float `default:"0.8"`
@@ -80,8 +80,8 @@ type PointJointEntityData struct {
 
 type HingeJointEntityData struct {
 	ConnectedEntityId engine.EntityId
-	LocalAnchorA      matrix.Vec3
-	TargetAnchorB     matrix.Vec3
+	LocalAnchorA      matrix.Vec3  // Local body anchor on this entity; hinge joints keep this coincident with TargetAnchorB.
+	TargetAnchorB     matrix.Vec3  // Local target anchor, or fixed world anchor when ConnectedEntityId is empty.
 	Stiffness         matrix.Float `default:"1"`
 	Bias              matrix.Float `default:"0.2"`
 	Correction        matrix.Float `default:"0.8"`

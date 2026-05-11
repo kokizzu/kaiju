@@ -231,6 +231,45 @@ func TestJointEntityDataEmptyTargetCreatesBodyWorldJoint(t *testing.T) {
 	}
 }
 
+func TestDistanceJointEntityDataAutoRestLengthUsesInitialBodyWorldOffset(t *testing.T) {
+	host := engine.NewHost("test", nil, nil)
+	source := engine.NewEntity(host.WorkGroup())
+	host.SetEntityId(source, "source")
+	source.Transform.SetPosition(matrix.NewVec3(2, 0, 0))
+	addJointTestRigidBody(source, host)
+
+	worldAnchor := matrix.NewVec3(0, 2, 0)
+	DistanceJointEntityData{
+		LocalAnchorA:   matrix.Vec3Zero(),
+		TargetAnchorB:  worldAnchor,
+		Stiffness:      1,
+		Bias:           0.2,
+		Correction:     0.8,
+		Slop:           0.001,
+		MaxCorrection:  0.5,
+		Enabled:        true,
+		AutoRestLength: true,
+	}.Init(source, host)
+
+	constraints := host.Physics().World().Constraints()
+	if len(constraints) != 1 || constraints[0].Distance == nil {
+		t.Fatalf("expected one body-world distance joint, got %#v", constraints)
+	}
+	joint := constraints[0].Distance
+	wantRestLength := source.Transform.WorldPosition().Distance(worldAnchor)
+	if matrix.Abs(joint.RestLength-wantRestLength) > 0.0001 {
+		t.Fatalf("expected auto rest length %f, got %f", wantRestLength, joint.RestLength)
+	}
+	if !matrix.Vec3ApproxTo(joint.WorldAnchorA(), source.Transform.WorldPosition(), 0.0001) {
+		t.Fatalf("expected local anchor A to start at body position %v, got %v",
+			source.Transform.WorldPosition(), joint.WorldAnchorA())
+	}
+	if !matrix.Vec3ApproxTo(joint.WorldAnchorB(), worldAnchor, 0.0001) {
+		t.Fatalf("expected target anchor B to be fixed world anchor %v, got %v",
+			worldAnchor, joint.WorldAnchorB())
+	}
+}
+
 func TestJointEntityDataMissingBodyOrTargetDoesNotPanic(t *testing.T) {
 	host := engine.NewHost("test", nil, nil)
 	source := engine.NewEntity(host.WorkGroup())

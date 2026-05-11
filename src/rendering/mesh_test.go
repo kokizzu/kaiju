@@ -264,8 +264,18 @@ func TestMeshArrowGeneration(t *testing.T) {
 }
 
 func TestMeshCapsuleGeneration(t *testing.T) {
-	assertPanics(t, func() {
-		cache := NewMeshCache(nil, nil)
-		NewMeshCapsule(&cache, 1, 2, 4, 2)
-	})
+	cache := NewMeshCache(nil, nil)
+	mesh := NewMeshCapsule(&cache, 1, 2, 4, 2)
+	assertMeshCounts(t, mesh, (2*2+2)*(4+1), (2*2+1)*4*6)
+	for i, index := range mesh.pendingIndexes {
+		if int(index) >= len(mesh.pendingVerts) {
+			t.Fatalf("capsule index %d = %d, want < %d", i, index, len(mesh.pendingVerts))
+		}
+	}
+	if got := mesh.pendingVerts[0].Position.Y(); got != 2 {
+		t.Fatalf("capsule top y = %v, want 2", got)
+	}
+	if got := mesh.pendingVerts[len(mesh.pendingVerts)-1].Position.Y(); got != -2 {
+		t.Fatalf("capsule bottom y = %v, want -2", got)
+	}
 }

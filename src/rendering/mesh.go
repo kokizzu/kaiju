@@ -750,126 +750,75 @@ func NewMeshWireCube(cache *MeshCache, key string, vertColor matrix.Color) *Mesh
 // segments controls the number of subdivisions around the circumference, rings controls the number of rings per hemisphere.
 func NewMeshCapsule(cache *MeshCache, radius, height float32, segments, rings int) *Mesh {
 	defer tracing.NewRegion("rendering.NewMeshCapsule").End()
+	if segments < 3 {
+		segments = 3
+	}
+	if rings < 1 {
+		rings = 1
+	}
 	key := fmt.Sprintf("capsule_%.2f_%.2f_%d_%d", radius, height, segments, rings)
 	if mesh, ok := cache.FindMesh(key); ok {
 		return mesh
 	}
-	// Calculate total vertices and indices
-	// Top hemisphere: (rings+1) * (segments+1) vertices (including poles)
-	// Bottom hemisphere: same as top
-	// Cylinder: segments * 2 vertices (two rings for top and bottom)
-	totalVerts := 2*(rings+1)*(segments+1) + segments*2
-	// Indices: 6 per quad for cylinder, 3 per triangle for hemispheres
-	totalIndices := 6*segments*(rings*2+1) + 6*segments*rings
-	verts := make([]Vertex, totalVerts)
-	indices := make([]uint32, totalIndices)
-	// Vertex index tracker
+
+	rowCount := rings*2 + 2
+	verts := make([]Vertex, rowCount*(segments+1))
+	indices := make([]uint32, (rowCount-1)*segments*6)
+
 	vIndex := 0
-	// Index array index tracker
+	topCenter := height / 2
+	bottomCenter := -height / 2
+	for row := 0; row < rowCount; row++ {
+		var y, ringRadius, normalRadius, normalY float32
+		if row <= rings {
+			theta := float32(row) * math.Pi / (2.0 * float32(rings))
+			normalRadius = matrix.Sin(theta)
+			normalY = matrix.Cos(theta)
+			y = topCenter + radius*normalY
+			ringRadius = radius * normalRadius
+		} else if row == rings+1 {
+			normalRadius = 1
+			normalY = 0
+			y = bottomCenter
+			ringRadius = radius
+		} else {
+			hemisphereRow := row - (rings + 1)
+			theta := math.Pi/2 + float32(hemisphereRow)*math.Pi/(2.0*float32(rings))
+			normalRadius = matrix.Sin(theta)
+			normalY = matrix.Cos(theta)
+			y = bottomCenter + radius*normalY
+			ringRadius = radius * normalRadius
+		}
+
+		for j := 0; j <= segments; j++ {
+			phi := float32(j) * 2.0 * math.Pi / float32(segments)
+			sinPhi := matrix.Sin(phi)
+			cosPhi := matrix.Cos(phi)
+			verts[vIndex].Position = matrix.Vec3{
+				ringRadius * cosPhi,
+				y,
+				ringRadius * sinPhi,
+			}
+			normal := matrix.Vec3{cosPhi * normalRadius, normalY, sinPhi * normalRadius}
+			verts[vIndex].Normal = normal.Normal()
+			verts[vIndex].UV0 = matrix.Vec2{
+				float32(j) / float32(segments),
+				float32(row) / float32(rowCount-1),
+			}
+			verts[vIndex].Color = matrix.ColorWhite()
+			vIndex++
+		}
+	}
+
 	iIndex := 0
-	// Generate top hemisphere (y=height/2 to y=0)
-	for i := 0; i <= rings; i++ {
-		theta := float32(i) * math.Pi / (2.0 * float32(rings)) // 0 to pi/2
-		sinTheta := matrix.Sin(theta)
-		cosTheta := matrix.Cos(theta)
-		y := height/2 + radius*cosTheta
-		rad := radius * sinTheta
-		for j := 0; j <= segments; j++ {
-			phi := float32(j) * 2.0 * math.Pi / float32(segments)
-			sinPhi := matrix.Sin(phi)
-			cosPhi := matrix.Cos(phi)
-			// Position
-			verts[vIndex].Position = matrix.Vec3{
-				rad * cosPhi,
-				y,
-				rad * sinPhi,
-			}
-			// Normal (normalized direction from center of top hemisphere)
-			normal := matrix.Vec3{cosPhi * sinTheta, cosTheta, sinPhi * sinTheta}
-			verts[vIndex].Normal = normal.Normal()
-			// UV
-			verts[vIndex].UV0 = matrix.Vec2{float32(j) / float32(segments), float32(i) / float32(rings*2)}
-			verts[vIndex].Color = matrix.ColorWhite()
-			vIndex++
-			// Indices for top hemisphere (except last ring)
-			if i < rings && j < segments {
-				v00 := uint32(i*(segments+1) + j)
-				v10 := uint32(i*(segments+1) + j + 1)
-				v01 := uint32((i+1)*(segments+1) + j)
-				v11 := uint32((i+1)*(segments+1) + j + 1)
-				// Two triangles per quad
-				indices[iIndex] = v00
-				indices[iIndex+1] = v10
-				indices[iIndex+2] = v01
-				indices[iIndex+3] = v01
-				indices[iIndex+4] = v10
-				indices[iIndex+5] = v11
-				iIndex += 6
-			}
-		}
-	}
-	// Generate bottom hemisphere (y=0 to y=-height/2)
-	bottomStart := vIndex
-	for i := 0; i <= rings; i++ {
-		theta := math.Pi/2 + float32(i)*math.Pi/(2.0*float32(rings)) // pi/2 to pi
-		sinTheta := matrix.Sin(theta)
-		cosTheta := matrix.Cos(theta)
-		y := -height/2 + radius*cosTheta
-		rad := radius * sinTheta
-		for j := 0; j <= segments; j++ {
-			phi := float32(j) * 2.0 * math.Pi / float32(segments)
-			sinPhi := matrix.Sin(phi)
-			cosPhi := matrix.Cos(phi)
-			verts[vIndex].Position = matrix.Vec3{
-				rad * cosPhi,
-				y,
-				rad * sinPhi,
-			}
-			normal := matrix.Vec3{cosPhi * sinTheta, cosTheta, sinPhi * sinTheta}
-			verts[vIndex].Normal = normal.Normal()
-			verts[vIndex].UV0 = matrix.Vec2{float32(j) / float32(segments), 0.5 + float32(i)/float32(rings*2)}
-			verts[vIndex].Color = matrix.ColorWhite()
-			vIndex++
-			if i < rings && j < segments {
-				v00 := uint32(bottomStart + i*(segments+1) + j)
-				v10 := uint32(bottomStart + i*(segments+1) + j + 1)
-				v01 := uint32(bottomStart + (i+1)*(segments+1) + j)
-				v11 := uint32(bottomStart + (i+1)*(segments+1) + j + 1)
-				indices[iIndex] = v00
-				indices[iIndex+1] = v10
-				indices[iIndex+2] = v01
-				indices[iIndex+3] = v01
-				indices[iIndex+4] = v10
-				indices[iIndex+5] = v11
-				iIndex += 6
-			}
-		}
-	}
-	// Generate cylinder (connects top hemisphere at y=0 to bottom hemisphere at y=0)
-	cylinderStart := vIndex
-	for j := 0; j < segments; j++ {
-		phi := float32(j) * 2.0 * math.Pi / float32(segments)
-		sinPhi := matrix.Sin(phi)
-		cosPhi := matrix.Cos(phi)
-		// Top ring (y=height/2)
-		verts[vIndex].Position = matrix.Vec3{radius * cosPhi, height / 2, radius * sinPhi}
-		verts[vIndex].Normal = matrix.Vec3{cosPhi, 0, sinPhi}
-		verts[vIndex].UV0 = matrix.Vec2{float32(j) / float32(segments), 0}
-		verts[vIndex].Color = matrix.ColorWhite()
-		vIndex++
-		// Bottom ring (y=-height/2)
-		verts[vIndex].Position = matrix.Vec3{radius * cosPhi, -height / 2, radius * sinPhi}
-		verts[vIndex].Normal = matrix.Vec3{cosPhi, 0, sinPhi}
-		verts[vIndex].UV0 = matrix.Vec2{float32(j) / float32(segments), 1}
-		verts[vIndex].Color = matrix.ColorWhite()
-		vIndex++
-		// Cylinder indices
-		if j < segments-1 {
-			v00 := uint32(cylinderStart + j*2)         // Top ring vertex
-			v10 := uint32(cylinderStart + (j+1)*2)     // Next top ring vertex
-			v01 := uint32(cylinderStart + j*2 + 1)     // Bottom ring vertex
-			v11 := uint32(cylinderStart + (j+1)*2 + 1) // Next bottom ring vertex
-			// Two triangles per quad (counter-clockwise when viewed from outside)
+	for row := 0; row < rowCount-1; row++ {
+		rowStart := row * (segments + 1)
+		nextRowStart := (row + 1) * (segments + 1)
+		for j := 0; j < segments; j++ {
+			v00 := uint32(rowStart + j)
+			v10 := uint32(rowStart + j + 1)
+			v01 := uint32(nextRowStart + j)
+			v11 := uint32(nextRowStart + j + 1)
 			indices[iIndex] = v00
 			indices[iIndex+1] = v10
 			indices[iIndex+2] = v01
@@ -879,70 +828,6 @@ func NewMeshCapsule(cache *MeshCache, radius, height float32, segments, rings in
 			iIndex += 6
 		}
 	}
-	// Connect last segment to first for cylinder
-	v00 := uint32(cylinderStart + (segments-1)*2)
-	v10 := uint32(cylinderStart)
-	v01 := uint32(cylinderStart + (segments-1)*2 + 1)
-	v11 := uint32(cylinderStart + 1)
-	indices[iIndex] = v00
-	indices[iIndex+1] = v10
-	indices[iIndex+2] = v01
-	indices[iIndex+3] = v01
-	indices[iIndex+4] = v10
-	indices[iIndex+5] = v11
-	iIndex += 6
-	// Connect hemispheres to cylinder
-	// Top hemisphere last ring to cylinder top ring
-	for j := 0; j < segments; j++ {
-		v00 := uint32((rings-1)*(segments+1) + j) // Last ring of top hemisphere
-		v01 := uint32(cylinderStart + j*2)        // Top cylinder ring
-		v10 := uint32((rings-1)*(segments+1) + j + 1)
-		v11 := uint32(cylinderStart + (j+1)*2)
-		indices[iIndex] = v00
-		indices[iIndex+1] = v01
-		indices[iIndex+2] = v10
-		indices[iIndex+3] = v10
-		indices[iIndex+4] = v01
-		indices[iIndex+5] = v11
-		iIndex += 6
-	}
-	// Connect last segment to first
-	v00 = uint32((rings-1)*(segments+1) + segments)
-	v01 = uint32(cylinderStart + (segments-1)*2)
-	v10 = uint32((rings - 1) * (segments + 1))
-	v11 = uint32(cylinderStart)
-	indices[iIndex] = v00
-	indices[iIndex+1] = v01
-	indices[iIndex+2] = v10
-	indices[iIndex+3] = v10
-	indices[iIndex+4] = v01
-	indices[iIndex+5] = v11
-	iIndex += 6
-	// Bottom hemisphere first ring to cylinder bottom ring
-	for j := 0; j < segments; j++ {
-		v00 := uint32(bottomStart + j)         // First ring of bottom hemisphere
-		v01 := uint32(cylinderStart + j*2 + 1) // Bottom cylinder ring
-		v10 := uint32(bottomStart + j + 1)
-		v11 := uint32(cylinderStart + (j+1)*2 + 1)
-		indices[iIndex] = v00
-		indices[iIndex+1] = v01
-		indices[iIndex+2] = v10
-		indices[iIndex+3] = v10
-		indices[iIndex+4] = v01
-		indices[iIndex+5] = v11
-		iIndex += 6
-	}
-	// Connect last segment to first
-	v00 = uint32(bottomStart + segments)
-	v01 = uint32(cylinderStart + (segments-1)*2 + 1)
-	v10 = uint32(bottomStart)
-	v11 = uint32(cylinderStart + 1)
-	indices[iIndex] = v00
-	indices[iIndex+1] = v01
-	indices[iIndex+2] = v10
-	indices[iIndex+3] = v10
-	indices[iIndex+4] = v01
-	indices[iIndex+5] = v11
 	return cache.Mesh(key, verts, indices)
 }
 

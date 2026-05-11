@@ -146,7 +146,7 @@ func (m *StageManager) List() []*StageEntity {
 func (m *StageManager) Selection() []*StageEntity { return m.selected }
 
 // AddEntity will generate a new entity for the stage with a new random Id. It
-// will internally just call #AddEntityWithId
+// will internally just call [StageManager.AddEntityWithId].
 func (m *StageManager) AddEntity(name string, point matrix.Vec3) *StageEntity {
 	defer tracing.NewRegion("StageManager.AddEntity").End()
 	e := m.AddEntityWithId(uuid.NewString(), name, point)

@@ -53,7 +53,7 @@ type engineUpdate struct {
 }
 
 // Updater is a struct that stores update functions to be called when the
-// #Updater.Update function is called. This simply goes through the list
+// [Updater.Update] function is called. This simply goes through the list
 // from top to bottom and calls each function.
 //
 // *Note that update functions are unordered, so don't rely on the order*
@@ -71,7 +71,7 @@ func (u *Updater) IsConcurrent() bool {
 	return u.threads != nil
 }
 
-// NewUpdater creates a new #Updater struct and returns it
+// NewUpdater creates a new [Updater] struct and returns it
 func NewUpdater() Updater {
 	return Updater{updates: make(map[UpdateId]engineUpdate)}
 }
@@ -84,11 +84,11 @@ func NewConcurrentUpdater(threads *concurrent.Threads) Updater {
 }
 
 // AddUpdate adds an update function to the list of updates to be called when
-// the #Updater.Update function is called. It returns the id of the update
+// the [Updater.Update] function is called. It returns the id of the update
 // function that was added so that it can be removed later.
 //
 // The update function is added to a back-buffer so it will not begin updating
-// until the next call to #Updater.Update.
+// until the next call to [Updater.Update].
 func (u *Updater) AddUpdate(update func(float64)) UpdateId {
 	id := UpdateId(u.nextId.Add(1))
 	u.backAdd = append(u.backAdd, engineUpdate{
@@ -99,11 +99,11 @@ func (u *Updater) AddUpdate(update func(float64)) UpdateId {
 }
 
 // RemoveUpdate removes an update function from the list of updates to be called
-// when the #Updater.Update function is called. It takes the id of the update
+// when the [Updater.Update] function is called. It takes the id of the update
 // function that was returned when the update function was added.
 //
 // The update function is removed from a back-buffer so it will not be removed
-// until the next call to #Updater.Update.
+// until the next call to [Updater.Update].
 func (u *Updater) RemoveUpdate(id *UpdateId) {
 	if *id > 0 {
 		u.backRemove = append(u.backRemove, *id)
@@ -113,7 +113,7 @@ func (u *Updater) RemoveUpdate(id *UpdateId) {
 
 // Update calls all of the update functions that have been added to the updater.
 // It takes a deltaTime parameter that is the approximate amount of time since
-// the last call to #Updater.Update.
+// the last call to [Updater.Update].
 func (u *Updater) Update(deltaTime float64) {
 	defer tracing.NewRegion("Updater.Update").End()
 	u.lastDelta = deltaTime

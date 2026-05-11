@@ -101,31 +101,61 @@ func (Margin) Preprocess(values []rules.PropertyValue, rules []rules.Rule) ([]ru
 	return values, rules
 }
 
-// TODO: this error handling is broken
 func (Margin) Process(panel *ui.Panel, elm *document.Element, values []rules.PropertyValue, host *engine.Host) error {
-	var err error
 	if len(values) == 1 {
-		err = MarginLeft{}.Process(panel, elm, values, host)
-		err = MarginTop{}.Process(panel, elm, values, host)
-		err = MarginRight{}.Process(panel, elm, values, host)
-		err = MarginBottom{}.Process(panel, elm, values, host)
+		if err := (MarginLeft{}).Process(panel, elm, values, host); err != nil {
+			return err
+		}
+		if err := (MarginTop{}).Process(panel, elm, values, host); err != nil {
+			return err
+		}
+		if err := (MarginRight{}).Process(panel, elm, values, host); err != nil {
+			return err
+		}
+		if err := (MarginBottom{}).Process(panel, elm, values, host); err != nil {
+			return err
+		}
 	} else if len(values) == 2 {
-		err = MarginTop{}.Process(panel, elm, values[:1], host)
-		err = MarginBottom{}.Process(panel, elm, values[:1], host)
-		err = MarginLeft{}.Process(panel, elm, values[1:], host)
-		err = MarginRight{}.Process(panel, elm, values[1:], host)
+		if err := (MarginTop{}).Process(panel, elm, values[:1], host); err != nil {
+			return err
+		}
+		if err := (MarginBottom{}).Process(panel, elm, values[:1], host); err != nil {
+			return err
+		}
+		if err := (MarginLeft{}).Process(panel, elm, values[1:], host); err != nil {
+			return err
+		}
+		if err := (MarginRight{}).Process(panel, elm, values[1:], host); err != nil {
+			return err
+		}
 	} else if len(values) == 3 {
-		err = MarginTop{}.Process(panel, elm, values[:1], host)
-		err = MarginRight{}.Process(panel, elm, values[1:2], host)
-		err = MarginLeft{}.Process(panel, elm, values[1:2], host)
-		err = MarginBottom{}.Process(panel, elm, values[2:], host)
+		if err := (MarginTop{}).Process(panel, elm, values[:1], host); err != nil {
+			return err
+		}
+		if err := (MarginRight{}).Process(panel, elm, values[1:2], host); err != nil {
+			return err
+		}
+		if err := (MarginLeft{}).Process(panel, elm, values[1:2], host); err != nil {
+			return err
+		}
+		if err := (MarginBottom{}).Process(panel, elm, values[2:], host); err != nil {
+			return err
+		}
 	} else if len(values) == 4 {
-		err = MarginTop{}.Process(panel, elm, values[:1], host)
-		err = MarginRight{}.Process(panel, elm, values[1:2], host)
-		err = MarginBottom{}.Process(panel, elm, values[2:3], host)
-		err = MarginLeft{}.Process(panel, elm, values[3:], host)
+		if err := (MarginTop{}).Process(panel, elm, values[:1], host); err != nil {
+			return err
+		}
+		if err := (MarginRight{}).Process(panel, elm, values[1:2], host); err != nil {
+			return err
+		}
+		if err := (MarginBottom{}).Process(panel, elm, values[2:3], host); err != nil {
+			return err
+		}
+		if err := (MarginLeft{}).Process(panel, elm, values[3:], host); err != nil {
+			return err
+		}
 	} else {
-		err = errors.New("Margin requires 1-4 values")
+		return errors.New("Margin requires 1-4 values")
 	}
-	return err
+	return nil
 }

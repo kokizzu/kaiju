@@ -60,7 +60,7 @@ type EntityId string
 // to access data that is specific to the entity.
 //
 // Child entities are unordered by default, you'll need to call
-// #Entity.SetChildrenOrdered to make them ordered. It is recommended to leave
+// [Entity.SetChildrenOrdered] to make them ordered. It is recommended to leave
 // children unordered unless you have a specific reason to order them.
 type Entity struct {
 	id                    EntityId
@@ -80,7 +80,7 @@ type Entity struct {
 	orderedChildren       bool
 }
 
-// NewEntity creates a new #Entity struct and returns it
+// NewEntity creates a new [Entity] struct and returns it
 func NewEntity(workGroup *concurrent.WorkGroup) *Entity {
 	e := &Entity{}
 	e.Init(workGroup)
@@ -138,7 +138,7 @@ func (e *Entity) SetChildrenUnordered() {
 }
 
 // Activate will set an active flag on the entity that can be queried with
-// #Entity.IsActive. It will also set the active flag on all children of the
+// [Entity.IsActive]. It will also set the active flag on all children of the
 // entity. If the entity is already active, this function will do nothing.
 func (e *Entity) Activate() {
 	if e.isActive {
@@ -153,7 +153,7 @@ func (e *Entity) Activate() {
 }
 
 // Deactivate will set an active flag on the entity that can be queried with
-// #Entity.IsActive. It will also set the active flag on all children of the
+// [Entity.IsActive]. It will also set the active flag on all children of the
 // entity. If the entity is already inactive, this function will do nothing.
 func (e *Entity) Deactivate() {
 	if !e.isActive {
@@ -168,7 +168,7 @@ func (e *Entity) Deactivate() {
 }
 
 // SetActive will set the active flag on the entity that can be queried with
-// #Entity.IsActive. It will also set the active flag on all children of the
+// [Entity.IsActive]. It will also set the active flag on all children of the
 // entity. If the entity is already active, this function will do nothing.
 func (e *Entity) SetActive(isActive bool) {
 	if e.isActive != isActive {

@@ -48,6 +48,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"kaijuengine.com/editor/codegen"
 	"kaijuengine.com/editor/project/project_database/content_database"
@@ -227,7 +228,7 @@ func (p *Project) CompileRelease() {
 }
 
 // CompileGame will build all of the Go code for the project without launching
-// it. Internally, this will call #CompileDebug or #CompileRelease based on the
+// it. Internally, this will call [Project.CompileDebug] or [Project.CompileRelease] based on the
 // supplied buildMode.
 func (p *Project) CompileGame(buildMode GameBuildMode) {
 	switch buildMode {
@@ -244,8 +245,12 @@ func (p *Project) CompileGame(buildMode GameBuildMode) {
 // details.
 func (p *Project) CompileWithTags(tags ...string) {
 	defer tracing.NewRegion("Project.CompileWithTags").End()
+
 	for !p.isCompiling.CompareAndSwap(false, true) {
+		time.Sleep(time.Millisecond)
 	}
+	defer p.isCompiling.Store(false)
+
 	if err := p.fileSystem.WriteDataBindingRegistryInit(p.entityData); err == nil {
 		slog.Info("successfully created data binding init registry")
 	} else {
@@ -276,7 +281,6 @@ func (p *Project) CompileWithTags(tags ...string) {
 	} else {
 		slog.Info("project executable successfully compiled")
 	}
-	p.isCompiling.Store(false)
 }
 
 func (p *Project) packagePath() string {
@@ -383,12 +387,13 @@ func (p *Project) Run(args ...string) {
 		slog.Warn("failed to grab the stdout pipe, no logs will be read")
 		return
 	}
+
 	scanner := bufio.NewScanner(outPipe)
-	var stderr, stdout bytes.Buffer
-	cmd.Stderr, cmd.Stdout = &stderr, &stdout
 	if err := cmd.Start(); err != nil {
 		slog.Error("failed to run", "error", err)
+		return
 	}
+
 	asStr := func(k string, m map[string]any) (string, bool) {
 		if iface, ok := m[k]; ok {
 			if v, ok := iface.(string); ok {
@@ -421,6 +426,12 @@ func (p *Project) Run(args ...string) {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("failed while reading process logs", "error", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		slog.Error("process exited with error", "error", err)
+	}
 }
 
 func (p *Project) ReadSourceCode() {
@@ -429,20 +440,32 @@ func (p *Project) ReadSourceCode() {
 		return
 	}
 	p.readingCode = true
+	defer func() { p.readingCode = false }()
+
 	p.entityData = p.entityData[:0]
 	p.entityDataMap = make(map[string]*codegen.GeneratedType)
 	slog.Info("reading through project code to find bindable data")
 	kaijuRoot, err := os.OpenRoot(filepath.Join(p.fileSystem.Name(), "kaiju"))
-	kaijuBindings, err := os.OpenRoot(filepath.Join(p.fileSystem.Name(), "kaiju/engine_entity_data"))
 	if err != nil {
 		slog.Error("failed to read the kaiju source code folder for the project", "error", err)
 		return
 	}
+	defer kaijuRoot.Close()
+
+	kaijuBindings, err := os.OpenRoot(filepath.Join(p.fileSystem.Name(), "kaiju/engine_entity_data"))
+	if err != nil {
+		slog.Error("failed to read the kaiju engine entity data folder for the project", "error", err)
+		return
+	}
+	defer kaijuBindings.Close()
+
 	srcRoot, err := os.OpenRoot(filepath.Join(p.fileSystem.Name(), "src"))
 	if err != nil {
 		slog.Error("failed to read the source code folder for the project", "error", err)
 		return
 	}
+	defer srcRoot.Close()
+
 	a, _ := codegen.Walk(kaijuRoot, kaijuBindings, "kaijuengine.com")
 	b, _ := codegen.Walk(srcRoot, srcRoot, p.fileSystem.ReadModName())
 	p.entityData = append(a, b...)
@@ -450,7 +473,6 @@ func (p *Project) ReadSourceCode() {
 		p.entityDataMap[p.entityData[i].RegisterKey] = &p.entityData[i]
 	}
 	slog.Info("completed reading through code for bindable data", "count", len(p.entityData))
-	p.readingCode = false
 	p.OnEntityDataUpdated.Execute(p.entityData)
 }
 

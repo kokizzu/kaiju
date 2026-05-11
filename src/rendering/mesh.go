@@ -40,7 +40,7 @@ import (
 	"fmt"
 	"math"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
 )
@@ -79,7 +79,7 @@ type Mesh struct {
 	key            string
 	pendingVerts   []Vertex
 	pendingIndexes []uint32
-	bounds         collision.AABB
+	bounds         graviton.AABB
 	dynamic        bool
 }
 
@@ -96,7 +96,7 @@ func NewMesh(key string, verts []Vertex, indexes []uint32) *Mesh {
 			low = matrix.Vec3Min(low, verts[i].Position)
 			high = matrix.Vec3Max(high, verts[i].Position)
 		}
-		m.bounds = collision.AABBFromMinMax(low, high)
+		m.bounds = graviton.AABBFromMinMax(low, high)
 	}
 	return m
 }
@@ -133,9 +133,9 @@ func (m *Mesh) DelayedCreate(device *GPUDevice) {
 	m.pendingIndexes = make([]uint32, 0)
 }
 
-func (m Mesh) Key() string            { return m.key }
-func (m Mesh) IsReady() bool          { return m.MeshId.IsValid() }
-func (m Mesh) Bounds() collision.AABB { return m.bounds }
+func (m Mesh) Key() string           { return m.key }
+func (m Mesh) IsReady() bool         { return m.MeshId.IsValid() }
+func (m Mesh) Bounds() graviton.AABB { return m.bounds }
 
 var (
 	meshQuadUvs         = [4]matrix.Vec2{{0, 1}, {0, 0}, {1, 0}, {1, 1}}

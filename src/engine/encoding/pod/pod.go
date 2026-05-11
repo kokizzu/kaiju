@@ -41,7 +41,7 @@ import (
 	"reflect"
 	"sync"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 )
 
@@ -81,11 +81,11 @@ func init() {
 	Register(matrix.Quaternion{})
 	Register(matrix.Mat3{})
 	Register(matrix.Mat4{})
-	Register(collision.AABB{})
-	Register(collision.Ray{})
-	Register(collision.Frustum{})
-	Register(collision.Plane{})
-	Register(collision.Triangle{})
+	Register(graviton.AABB{})
+	Register(graviton.Ray{})
+	Register(graviton.Frustum{})
+	Register(graviton.Plane{})
+	Register(graviton.Triangle{})
 }
 
 func Unregister(layout any) {

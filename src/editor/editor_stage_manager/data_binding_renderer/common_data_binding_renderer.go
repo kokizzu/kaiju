@@ -42,7 +42,7 @@ import (
 	"kaijuengine.com/editor/editor_stage_manager"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/assets"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/registry/shader_data_registry"
 	"kaijuengine.com/rendering"
@@ -78,9 +78,9 @@ func commonAttached(host *engine.Host, manager *editor_stage_manager.StageManage
 		}
 		host.Drawings.AddDrawing(draw)
 	})
-	box := collision.AABB{}
+	box := graviton.AABB{}
 	box.Extent = target.Transform.WorldScale().Scale(0.5)
-	target.StageData.Bvh = collision.NewBVH([]collision.HitObject{box}, &target.Transform, target)
+	target.StageData.Bvh = graviton.NewBVH([]graviton.HitObject{box}, &target.Transform, target)
 	manager.AddBVH(target)
 	target.OnDeactivate.Add(sd.Deactivate)
 	target.OnActivate.Add(sd.Activate)

@@ -40,6 +40,7 @@ import (
 	"sort"
 
 	"kaijuengine.com/matrix"
+	"kaijuengine.com/platform/profiler/tracing"
 )
 
 type HitObject interface {
@@ -61,24 +62,43 @@ type BVHItem struct {
 	Data      any
 }
 
+type TriangleBVH struct {
+	Bounds      AABB
+	Left        *TriangleBVH
+	Right       *TriangleBVH
+	Triangle    DetailedTriangle
+	HasTriangle bool
+}
+
 func (item BVHItem) IsValid() bool { return item.HitCheck != nil }
 
 func (item BVHItem) Bounds() AABB {
+	if item.HitCheck == nil {
+		return AABB{}
+	}
 	bounds := item.HitCheck.Bounds()
 	if item.Transform == nil {
+		return bounds
+	}
+	if _, ok := item.HitCheck.(*BVH); ok {
 		return bounds
 	}
 	mat := item.Transform.WorldMatrix()
 	min := mat.TransformPoint(bounds.Min())
 	max := mat.TransformPoint(bounds.Max())
-	return NewAABB(min.Add(max).Shrink(2.0), max.Subtract(min).Shrink(2.0))
+	return AABB{
+		Center: min.Add(max).Shrink(2.0),
+		Extent: max.Subtract(min).Shrink(2.0),
+	}
 }
 
 func (item BVHItem) RayIntersect(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {
+	defer tracing.NewRegion("BVHItem.RayIntersect").End()
 	return item.HitCheck.RayIntersectTest(ray, length, item.Transform)
 }
 
 func NewBVH(entries []HitObject, transform *matrix.Transform, data any) *BVH {
+	defer tracing.NewRegion("collision.NewBVH").End()
 	if len(entries) == 0 {
 		return nil
 	}
@@ -135,12 +155,56 @@ func CloneBVH(bvh *BVH) *BVH {
 	return clone
 }
 
+func NewTriangleBVH(bvh *BVH) *TriangleBVH {
+	defer tracing.NewRegion("collision.NewTriangleBVH").End()
+	if bvh == nil {
+		return nil
+	}
+	out := &TriangleBVH{
+		Bounds: bvh.bounds,
+	}
+	if bvh.IsLeaf() && bvh.Item.IsValid() {
+		if tri, ok := bvh.Item.HitCheck.(DetailedTriangle); ok {
+			out.Triangle = tri
+			out.HasTriangle = true
+		}
+		return out
+	}
+	out.Left = NewTriangleBVH(bvh.Left)
+	out.Right = NewTriangleBVH(bvh.Right)
+	return out
+}
+
+func (b *TriangleBVH) ToBVH(transform *matrix.Transform, data any) *BVH {
+	if b == nil {
+		return nil
+	}
+	out := &BVH{
+		bounds: b.Bounds,
+	}
+	if b.HasTriangle {
+		out.Item = BVHItem{transform, b.Triangle, data}
+		return out
+	}
+	out.Left = b.Left.ToBVH(transform, data)
+	out.Right = b.Right.ToBVH(transform, data)
+	if out.Left != nil {
+		out.Left.Parent = out
+	}
+	if out.Right != nil {
+		out.Right.Parent = out
+	}
+	return out
+}
+
 func (b *BVH) RayIntersectTest(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {
+	defer tracing.NewRegion("BVH.RayIntersectTest").End()
 	_, pt, ok := b.RayIntersect(ray, length)
 	return pt, ok
 }
 
 func (b *BVH) RayIntersect(ray Ray, length float32) (any, matrix.Vec3, bool) {
+	defer tracing.NewRegion("BVH.RayIntersect").End()
 	if b == nil {
 		return nil, matrix.Vec3{}, false
 	}
@@ -149,15 +213,13 @@ func (b *BVH) RayIntersect(ray Ray, length float32) (any, matrix.Vec3, bool) {
 		return nil, matrix.Vec3{}, false
 	}
 	if b.IsLeaf() && b.Item.IsValid() {
-		if pt, ok := b.Item.RayIntersect(ray, length, b.Item.Transform); ok {
-			if sub, ok := b.Item.Data.(*BVH); ok {
+		if sub, ok := b.Item.Data.(*BVH); ok {
+			if _, ok := b.Item.HitCheck.(*BVH); ok {
 				return sub.RayIntersect(ray, length)
 			}
-			data := b.Item.Data
-			if data == nil {
-				data = b.Item.HitCheck
-			}
-			return data, pt, true
+		}
+		if pt, ok := b.Item.RayIntersect(ray, length, b.Item.Transform); ok {
+			return b.Item.Data, pt, true
 		}
 		return nil, matrix.Vec3{}, false
 	}
@@ -189,6 +251,7 @@ func (b *BVH) IsLeaf() bool {
 }
 
 func (b *BVH) Refit() {
+	defer tracing.NewRegion("BVH.Refit").End()
 	if b == nil {
 		return
 	}
@@ -205,26 +268,42 @@ func (b *BVH) refitChildren() {
 	}
 }
 
-func AddSubBVH(world **BVH, sub *BVH, transform *matrix.Transform) {
-	InsertBVH(world, sub, transform, sub)
+func (b *BVH) RefitUpwards() {
+	defer tracing.NewRegion("BVH.RefitUpwards").End()
+	for current := b; current != nil; current = current.Parent {
+		current.refitNode()
+	}
 }
 
-func InsertBVH(root **BVH, hitCheck HitObject, transform *matrix.Transform, data any) {
-	if *root == nil {
-		if sub, ok := hitCheck.(*BVH); ok {
-			*root = sub
-		} else {
-			*root = &BVH{Item: BVHItem{transform, hitCheck, data}}
-			(*root).bounds = (*root).Item.HitCheck.Bounds()
+func (b *BVH) refitNode() {
+	if b.IsLeaf() {
+		if b.Item.IsValid() {
+			b.bounds = b.Item.Bounds()
 		}
-		return
-	}
-	var newNode *BVH
-	if sub, ok := hitCheck.(*BVH); ok {
-		newNode = sub
 	} else {
-		newNode = &BVH{Item: BVHItem{transform, hitCheck, data}}
-		newNode.bounds = newNode.Item.Bounds()
+		b.bounds = AABBUnion(b.Left.bounds, b.Right.bounds)
+	}
+}
+
+func AddSubBVH(world **BVH, sub *BVH, transform *matrix.Transform) *BVH {
+	defer tracing.NewRegion("collision.AddSubBVH").End()
+	if sub == nil {
+		return nil
+	}
+	sub.Refit()
+	return InsertBVH(world, sub, transform, sub)
+}
+
+func InsertBVH(root **BVH, hitCheck HitObject, transform *matrix.Transform, data any) *BVH {
+	defer tracing.NewRegion("collision.InsertBVH").End()
+	if root == nil || hitCheck == nil {
+		return nil
+	}
+	newNode := &BVH{Item: BVHItem{transform, hitCheck, data}}
+	newNode.bounds = newNode.Item.Bounds()
+	if *root == nil {
+		*root = newNode
+		return newNode
 	}
 	sibling := findBestSibling(*root, newNode.bounds)
 	oldParent := sibling.Parent
@@ -250,9 +329,11 @@ func InsertBVH(root **BVH, hitCheck HitObject, transform *matrix.Transform, data
 	} else {
 		*root = newParent
 	}
+	return newNode
 }
 
 func RemoveSubBVH(world **BVH, sub *BVH) {
+	defer tracing.NewRegion("collision.RemoveSubBVH").End()
 	if *world == nil {
 		return
 	}
@@ -263,7 +344,19 @@ func RemoveSubBVH(world **BVH, sub *BVH) {
 	removeLeaf(world, leaf)
 }
 
+func RemoveBVHNode(root **BVH, node *BVH) {
+	defer tracing.NewRegion("collision.RemoveBVHNode").End()
+	if root == nil || *root == nil || node == nil {
+		return
+	}
+	if node.Parent == nil && *root != node {
+		return
+	}
+	removeLeaf(root, node)
+}
+
 func RemoveAllLeavesMatchingTransform(world **BVH, transform *matrix.Transform) {
+	defer tracing.NewRegion("collision.RemoveAllLeavesMatchingTransform").End()
 	if world == nil || *world == nil {
 		return
 	}
@@ -277,8 +370,9 @@ func RemoveAllLeavesMatchingTransform(world **BVH, transform *matrix.Transform) 
 }
 
 func computeBounds(entries []HitObject) AABB {
+	defer tracing.NewRegion("collision.computeBounds").End()
 	if len(entries) == 0 {
-		return NullAABB
+		return AABB{}
 	}
 	b := entries[0].Bounds()
 	for i := 1; i < len(entries); i++ {
@@ -288,6 +382,7 @@ func computeBounds(entries []HitObject) AABB {
 }
 
 func findLeafWithTransform(b *BVH, target *matrix.Transform) *BVH {
+	defer tracing.NewRegion("collision.findLeafWithTransform").End()
 	if b == nil {
 		return nil
 	}
@@ -304,6 +399,7 @@ func findLeafWithTransform(b *BVH, target *matrix.Transform) *BVH {
 }
 
 func findBestSibling(tree *BVH, newBounds AABB) *BVH {
+	defer tracing.NewRegion("collision.findBestSibling").End()
 	current := tree
 	for !current.IsLeaf() {
 		leftIncrease := AABBUnion(current.Left.bounds, newBounds).SurfaceArea() - current.Left.bounds.SurfaceArea()
@@ -318,6 +414,7 @@ func findBestSibling(tree *BVH, newBounds AABB) *BVH {
 }
 
 func findLeafWithData(b *BVH, target HitObject) *BVH {
+	defer tracing.NewRegion("collision.findLeafWithData").End()
 	if b == nil {
 		return nil
 	}
@@ -334,8 +431,10 @@ func findLeafWithData(b *BVH, target HitObject) *BVH {
 }
 
 func removeLeaf(root **BVH, leaf *BVH) {
+	defer tracing.NewRegion("collision.removeLeaf").End()
 	if leaf.Parent == nil {
 		*root = nil
+		leaf.Parent = nil
 		return
 	}
 	parent := leaf.Parent
@@ -361,4 +460,7 @@ func removeLeaf(root **BVH, leaf *BVH) {
 	} else {
 		*root = sibling
 	}
+	leaf.Parent = nil
+	parent.Left = nil
+	parent.Right = nil
 }

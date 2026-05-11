@@ -34,7 +34,7 @@
 /* OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                              */
 /******************************************************************************/
 
-package collision
+package graviton
 
 import (
 	"testing"

@@ -39,7 +39,7 @@ package editor_stage_manager
 import (
 	"slices"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
@@ -158,14 +158,14 @@ func (m *StageManager) DeselectEntity(e *StageEntity) {
 	}
 }
 
-func (m *StageManager) TryHitEntity(ray collision.Ray) (*StageEntity, matrix.Vec3, bool) {
+func (m *StageManager) TryHitEntity(ray graviton.Ray) (*StageEntity, matrix.Vec3, bool) {
 	if target, pt, ok := m.worldBVH.RayIntersect(ray, 1000); ok {
 		return target.(*StageEntity), pt, ok
 	}
 	return nil, matrix.Vec3{}, false
 }
 
-func (m *StageManager) TrySelect(ray collision.Ray) (*StageEntity, bool) {
+func (m *StageManager) TrySelect(ray graviton.Ray) (*StageEntity, bool) {
 	defer tracing.NewRegion("StageManager.TrySelect").End()
 	m.ClearSelection()
 	return m.TryAppendSelect(ray)
@@ -198,7 +198,7 @@ func (m *StageManager) TryBoxSelect(screenBox matrix.Vec4) {
 	}
 }
 
-func (m *StageManager) TryAppendSelect(ray collision.Ray) (*StageEntity, bool) {
+func (m *StageManager) TryAppendSelect(ray graviton.Ray) (*StageEntity, bool) {
 	defer tracing.NewRegion("StageManager.TryAppendSelect").End()
 	if e, _, ok := m.TryHitEntity(ray); ok {
 		m.SelectEntity(e)
@@ -207,7 +207,7 @@ func (m *StageManager) TryAppendSelect(ray collision.Ray) (*StageEntity, bool) {
 	return nil, false
 }
 
-func (m *StageManager) TryToggleSelect(ray collision.Ray) (*StageEntity, bool) {
+func (m *StageManager) TryToggleSelect(ray graviton.Ray) (*StageEntity, bool) {
 	defer tracing.NewRegion("StageManager.TryToggleSelect").End()
 	if e, _, ok := m.TryHitEntity(ray); ok {
 		if m.IsSelected(e) {
@@ -239,20 +239,20 @@ func (m *StageManager) SelectionPivotCenter() matrix.Vec3 {
 	return center
 }
 
-func (m *StageManager) SelectionBounds() collision.AABB {
+func (m *StageManager) SelectionBounds() graviton.AABB {
 	defer tracing.NewRegion("StageManager.SelectionBounds").End()
 	low := matrix.Vec3Inf(1)
 	high := matrix.Vec3Inf(-1)
 	center := matrix.Vec3Zero()
 	for _, e := range m.selected {
 		p := e.Transform.Position()
-		var b collision.AABB
+		var b graviton.AABB
 		if e.StageData.Bvh != nil {
 			b = e.StageData.Bvh.Bounds()
 			b.Extent.MultiplyAssign(e.Transform.WorldScale())
 			b.Center.AddAssign(p)
 		} else {
-			b = collision.AABBFromTransform(&e.Transform)
+			b = graviton.AABBFromTransform(&e.Transform)
 		}
 		center.AddAssign(b.Center)
 		ex := matrix.Vec3Max(matrix.Vec3Zero(), b.Extent)
@@ -260,7 +260,7 @@ func (m *StageManager) SelectionBounds() collision.AABB {
 		high = matrix.Vec3Max(high, p.Add(ex))
 	}
 	center.ShrinkAssign(float32(len(m.selected)))
-	return collision.AABB{
+	return graviton.AABB{
 		Center: center,
 		Extent: high.Subtract(low).Scale(0.5),
 	}

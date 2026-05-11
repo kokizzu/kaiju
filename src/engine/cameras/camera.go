@@ -37,7 +37,7 @@
 package cameras
 
 import (
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 )
 
@@ -56,7 +56,7 @@ type Camera interface {
 	SetLookAt(position matrix.Vec3)
 	SetLookAtWithUp(point, up matrix.Vec3)
 	SetPositionAndLookAt(position, lookAt matrix.Vec3)
-	RayCast(cursorPosition matrix.Vec2) collision.Ray
+	RayCast(cursorPosition matrix.Vec2) graviton.Ray
 	TryPlaneHit(cursorPosition matrix.Vec2, planePos, planeNml matrix.Vec3) (hit matrix.Vec3, success bool)
 	ForwardPlaneHit(cursorPosition matrix.Vec2, planePos matrix.Vec3) (matrix.Vec3, bool)
 	Position() matrix.Vec3
@@ -70,7 +70,7 @@ type Camera interface {
 	FarPlane() float32
 	IsOrthographic() bool
 	Viewport() matrix.Vec4
-	Frustum() collision.Frustum
+	Frustum() graviton.Frustum
 	LightFrustumCSMProjections() []matrix.Mat4
 	NumCSMCascades() uint8
 	CSMCascadeDistances() [4]float32

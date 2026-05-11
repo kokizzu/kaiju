@@ -40,7 +40,7 @@ import (
 	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/registry/shader_data_registry"
@@ -66,7 +66,7 @@ type RotationTool struct {
 type TranslationToolCircle struct {
 	shaderData rendering.DrawInstance
 	transform  matrix.Transform
-	hitCircle  collision.Circle
+	hitCircle  graviton.Circle
 }
 
 func (t *RotationTool) Initialize(host *engine.Host) {
@@ -193,17 +193,17 @@ func (t *RotationTool) updateHitCircles() {
 	scale := t.root.Scale().LargestAxis()
 	r := matrix.Float((rotationGizmoRadius + clickPadding) * scale)
 	for i := range t.circles {
-		t.circles[i].hitCircle = collision.Circle{
+		t.circles[i].hitCircle = graviton.Circle{
 			Point:  t.root.Position(),
 			Radius: r,
 		}
 		switch i {
 		case matrix.Vx:
-			t.circles[i].hitCircle.Axis = collision.AxisX
+			t.circles[i].hitCircle.Axis = graviton.AxisX
 		case matrix.Vy:
-			t.circles[i].hitCircle.Axis = collision.AxisY
+			t.circles[i].hitCircle.Axis = graviton.AxisY
 		case matrix.Vz:
-			t.circles[i].hitCircle.Axis = collision.AxisZ
+			t.circles[i].hitCircle.Axis = graviton.AxisZ
 		}
 	}
 }

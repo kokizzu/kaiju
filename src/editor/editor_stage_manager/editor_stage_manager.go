@@ -57,7 +57,7 @@ import (
 	"kaijuengine.com/editor/project/project_file_system"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/assets"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/stages"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/klib"
@@ -85,15 +85,15 @@ type StageManager struct {
 	history               *memento.History
 	entities              []*StageEntity
 	selected              []*StageEntity
-	worldBVH              *collision.BVH
+	worldBVH              *graviton.BVH
 }
 
 // StageEntityEditorData is the structure holding all the uniquely identifiable
 // and linking data about the entity on this stage. That will include things
 // like content linkage, data bindings, etc.
 type StageEntityEditorData struct {
-	Bvh                   *collision.BVH
-	WorldBvh              *collision.BVH
+	Bvh                   *graviton.BVH
+	WorldBvh              *graviton.BVH
 	Mesh                  *rendering.Mesh
 	ShaderData            rendering.DrawInstance
 	Description           stages.EntityDescription
@@ -355,13 +355,13 @@ func (m *StageManager) AddBVH(e *StageEntity) {
 	if e.StageData.WorldBvh != nil {
 		m.RemoveEntityBVH(e)
 	}
-	e.StageData.WorldBvh = collision.AddSubBVH(&m.worldBVH,
+	e.StageData.WorldBvh = graviton.AddSubBVH(&m.worldBVH,
 		e.StageData.Bvh, &e.Transform)
 }
 
-//func (m *StageManager) RemoveBVH(bvh *collision.BVH) {
+//func (m *StageManager) RemoveBVH(bvh *graviton.BVH) {
 //	defer tracing.NewRegion("StageManager.RemoveBVH").End()
-//	collision.RemoveSubBVH(&m.worldBVH, bvh)
+//	graviton.RemoveSubBVH(&m.worldBVH, bvh)
 //}
 
 func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
@@ -370,11 +370,11 @@ func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
 		return
 	}
 	if e.StageData.WorldBvh != nil {
-		collision.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
+		graviton.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
 		e.StageData.WorldBvh = nil
 		return
 	}
-	collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
+	graviton.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 }
 
 // entityToTemplate is a wrapper around [entityToDescription] so that the

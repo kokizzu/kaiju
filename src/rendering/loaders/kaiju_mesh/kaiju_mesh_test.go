@@ -41,7 +41,7 @@ import (
 	"encoding/gob"
 	"testing"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/rendering"
 )
@@ -72,7 +72,7 @@ func TestKaijuMeshSerializePreservesBVH(t *testing.T) {
 		t.Fatal("expected serialized mesh to preserve the BVH archive")
 	}
 	bvh := loaded.GenerateBVH(nil, nil, "hit")
-	target, _, ok := bvh.RayIntersect(collision.Ray{
+	target, _, ok := bvh.RayIntersect(graviton.Ray{
 		Origin:    matrix.Vec3{0.25, 0.25, 1},
 		Direction: matrix.Vec3{0, 0, -1},
 	}, 2)

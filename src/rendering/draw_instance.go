@@ -40,14 +40,14 @@ import (
 	"reflect"
 	"unsafe"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
 )
 
 type ViewCuller interface {
-	IsInView(box collision.AABB) bool
+	IsInView(box graviton.AABB) bool
 	ViewChanged() bool
 }
 
@@ -61,7 +61,7 @@ type DrawInstance interface {
 	IsInView() bool
 	Size() int
 	SetModel(model matrix.Mat4)
-	UpdateModel(viewCuller ViewCuller, container collision.AABB)
+	UpdateModel(viewCuller ViewCuller, container graviton.AABB)
 	DataPointer() unsafe.Pointer
 	// Returns true if it should write the data, otherwise false
 	UpdateBoundData() bool
@@ -70,7 +70,7 @@ type DrawInstance interface {
 	setTransform(transform *matrix.Transform)
 	SelectLights(lights LightsForRender)
 	addShadow(shadow DrawInstance)
-	renderBounds() collision.AABB
+	renderBounds() graviton.AABB
 }
 
 func ReflectDuplicateDrawInstance(target DrawInstance) DrawInstance {
@@ -86,7 +86,7 @@ func ReflectDuplicateDrawInstance(target DrawInstance) DrawInstance {
 const ShaderBaseDataStart = unsafe.Offsetof(ShaderDataBase{}.model)
 
 type ShaderDataBase struct {
-	aabb        collision.AABB
+	aabb        graviton.AABB
 	destroyed   bool
 	deactivated bool
 	viewCulled  bool
@@ -177,7 +177,7 @@ func (s *ShaderDataBase) forceUpdateTransformModel() {
 	s.model = matrix.Mat4Multiply(s.InitModel, s.transform.WorldMatrix())
 }
 
-func (s *ShaderDataBase) UpdateModel(viewCuller ViewCuller, container collision.AABB) {
+func (s *ShaderDataBase) UpdateModel(viewCuller ViewCuller, container graviton.AABB) {
 	recalcCulling := false
 	if viewCuller != nil {
 		recalcCulling = viewCuller.ViewChanged()
@@ -186,7 +186,7 @@ func (s *ShaderDataBase) UpdateModel(viewCuller ViewCuller, container collision.
 		s.forceUpdateTransformModel()
 		a := s.model.TransformPoint(container.Min())
 		b := s.model.TransformPoint(container.Max())
-		s.aabb = collision.AABBFromMinMax(a, b)
+		s.aabb = graviton.AABBFromMinMax(a, b)
 		recalcCulling = true
 	} else if s.transform == nil {
 		s.aabb = container
@@ -196,7 +196,7 @@ func (s *ShaderDataBase) UpdateModel(viewCuller ViewCuller, container collision.
 	}
 }
 
-func (s *ShaderDataBase) renderBounds() collision.AABB { return s.aabb }
+func (s *ShaderDataBase) renderBounds() graviton.AABB { return s.aabb }
 
 func (s *ShaderDataBase) DataPointer() unsafe.Pointer {
 	return unsafe.Pointer(&s.model[0])

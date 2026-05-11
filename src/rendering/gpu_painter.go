@@ -37,7 +37,7 @@
 package rendering
 
 import (
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/platform/profiler/tracing"
 )
 
@@ -60,8 +60,8 @@ type GPUPainter struct {
 
 type combinedDrawingCuller struct{}
 
-func (combinedDrawingCuller) IsInView(collision.AABB) bool { return true }
-func (combinedDrawingCuller) ViewChanged() bool            { return true }
+func (combinedDrawingCuller) IsInView(graviton.AABB) bool { return true }
+func (combinedDrawingCuller) ViewChanged() bool           { return true }
 
 type ComputeTask struct {
 	Shader         *Shader

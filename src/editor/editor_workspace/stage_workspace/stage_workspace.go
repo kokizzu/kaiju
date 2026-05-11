@@ -39,8 +39,10 @@ package stage_workspace
 import (
 	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/editor/editor_stage_manager/editor_stage_view"
+	"kaijuengine.com/editor/editor_workspace"
 	"kaijuengine.com/editor/editor_workspace/common_workspace"
-	"kaijuengine.com/engine"
+	"kaijuengine.com/editor/editor_workspace_registry"
+	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/engine/ui/markup/document"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
@@ -49,11 +51,28 @@ import (
 	"kaijuengine.com/platform/windowing"
 )
 
-const maxContentDropDistance = 10
+const (
+	// ID is the stable workspace identifier used for registration, settings
+	// persistence, and SelectWorkspace calls. Exported so other packages can
+	// reference the stage workspace without using a magic string.
+	ID = "stage"
+
+	// DisplayName is the label shown on the stage workspace's menu bar tab.
+	DisplayName = "Stage"
+
+	maxContentDropDistance = 10
+)
+
+// init registers the stage workspace singleton with the global registry.
+// The editor reads the registry during postProjectLoad to decide which
+// workspaces are active.
+func init() {
+	editor_workspace_registry.Register(&StageWorkspace{})
+}
 
 type StageWorkspace struct {
 	common_workspace.CommonWorkspace
-	ed          StageWorkspaceEditorInterface
+	ed          editor_workspace.WorkspaceEditorInterface
 	stageView   *editor_stage_view.StageView
 	pageData    WorkspaceUIData
 	contentUI   WorkspaceContentUI
@@ -63,10 +82,16 @@ type StageWorkspace struct {
 		arrow *document.Element
 		y     float32
 	}
+	openStageSubID events.Id
 }
 
-func (w *StageWorkspace) Initialize(host *engine.Host, ed StageWorkspaceEditorInterface) {
+func (w *StageWorkspace) ID() string          { return ID }
+func (w *StageWorkspace) DisplayName() string { return DisplayName }
+func (w *StageWorkspace) IsRequired() bool    { return true }
+
+func (w *StageWorkspace) Initialize(ed editor_workspace.WorkspaceEditorInterface) error {
 	defer tracing.NewRegion("StageWorkspace.Initialize").End()
+	host := ed.Host()
 	w.ed = ed
 	w.stageView = ed.StageView()
 	w.stageView.Initialize(host, ed)
@@ -77,14 +102,32 @@ func (w *StageWorkspace) Initialize(host *engine.Host, ed StageWorkspaceEditorIn
 	funcs = klib.MapJoin(funcs, w.contentUI.setupFuncs())
 	funcs = klib.MapJoin(funcs, w.hierarchyUI.setupFuncs())
 	funcs = klib.MapJoin(funcs, w.detailsUI.setupFuncs())
-	w.CommonWorkspace.InitializeWithUI(host,
-		"editor/ui/workspace/stage_workspace.go.html", w.pageData, funcs)
+	if err := w.CommonWorkspace.InitializeWithUI(host,
+		"editor/ui/workspace/stage_workspace.go.html", w.pageData, funcs); err != nil {
+		return err
+	}
 	w.ftde.arrow, _ = w.Doc.GetElementById("ftdeArrow")
 	w.contentUI.setup(w, w.ed.Events())
 	w.hierarchyUI.setup(w)
 	w.detailsUI.setup(w)
 	w.initLLMActions()
+	// Subscribe to cross-workspace requests. The content workspace publishes
+	// OnRequestOpenStage when the user picks a stage asset; we open it and
+	// switch ourselves active.
+	w.openStageSubID = ed.Events().OnRequestOpenStage.Add(func(stageID string) {
+		w.OpenStage(stageID)
+		ed.SelectWorkspace(ID)
+	})
 	w.loadLastOpenStage()
+	return nil
+}
+
+func (w *StageWorkspace) Shutdown() {
+	defer tracing.NewRegion("StageWorkspace.Shutdown").End()
+	if w.ed != nil {
+		w.ed.Events().OnRequestOpenStage.Remove(w.openStageSubID)
+	}
+	w.CommonShutdown()
 }
 
 func (w *StageWorkspace) loadLastOpenStage() {

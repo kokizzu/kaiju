@@ -47,49 +47,19 @@ import (
 	"kaijuengine.com/editor/editor_overlay/confirm_prompt"
 	"kaijuengine.com/editor/editor_overlay/input_prompt"
 	"kaijuengine.com/editor/editor_plugin"
+	"kaijuengine.com/editor/editor_workspace/settings_workspace"
+	"kaijuengine.com/editor/editor_workspace/stage_workspace"
 	"kaijuengine.com/editor/project"
 	"kaijuengine.com/editor/project/project_database/content_database"
 	"kaijuengine.com/editor/project/project_file_system"
 	"kaijuengine.com/platform/profiler/tracing"
 )
 
-// StageWorkspaceSelected will inform the editor that the developer has
-// changed to the stage workspace. This is an exposed function to meet the
-// interface needs of [menu_bar.MenuBarHandler].
-func (ed *Editor) StageWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateStage)
-}
-
-// ContentWorkspaceSelected will inform the editor that the developer has
-// changed to the content workspace. This is an exposed function to meet the
-// interface needs of [menu_bar.MenuBarHandler].
-func (ed *Editor) ContentWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateContent)
-}
-
-// ShadingWorkspaceSelected will inform the editor that the developer has
-// changed to the shading workspace. This is an exposed function to meet the
-// interface needs of [menu_bar.MenuBarHandler].
-func (ed *Editor) ShadingWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateShading)
-}
-
-func (ed *Editor) VfxWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateVfx)
-}
-
-// UIWorkspaceSelected will inform the editor that the developer has changed to
-// the ui workspace. This is an exposed function to meet the interface needs of
-// [menu_bar.MenuBarHandler].
-func (ed *Editor) UIWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateUI)
-}
-
-// SettingsWorkspaceSelected will inform the editor that the developer has
-// changed to the settings workspace. This is an exposed function to meet the
-// interface needs of [menu_bar.MenuBarHandler].
-func (ed *Editor) SettingsWorkspaceSelected() {
-	ed.setWorkspaceState(WorkspaceStateSettings)
+// WorkspaceSelected switches the active workspace to the one with the given
+// id. Called by the menu bar when the user clicks a tab and by plugins via
+// editor_workspace.WorkspaceEditorInterface.SelectWorkspace.
+func (ed *Editor) WorkspaceSelected(id string) {
+	ed.setWorkspaceState(id)
 }
 
 func (ed *Editor) Build(buildMode project.GameBuildMode) {
@@ -266,20 +236,28 @@ func (ed *Editor) SaveCurrentStageWithCallback(cb func(bool)) {
 }
 
 func (ed *Editor) CreateNewCamera() {
-	ed.workspaces.stage.CreateNewCamera()
+	if s, ok := workspaceAs[*stage_workspace.StageWorkspace](ed, stage_workspace.ID); ok {
+		s.CreateNewCamera()
+	}
 }
 
 func (ed *Editor) CreateNewEntity() {
+	s, ok := workspaceAs[*stage_workspace.StageWorkspace](ed, stage_workspace.ID)
+	if !ok {
+		return
+	}
 	ed.history.BeginTransaction()
 	defer ed.history.CommitTransaction()
-	e, _ := ed.workspaces.stage.CreateNewEntity()
+	e, _ := s.CreateNewEntity()
 	m := ed.stageView.Manager()
 	m.ClearSelection()
 	m.SelectEntity(e)
 }
 
 func (ed *Editor) CreateNewLight() {
-	ed.workspaces.stage.CreateNewLight()
+	if s, ok := workspaceAs[*stage_workspace.StageWorkspace](ed, stage_workspace.ID); ok {
+		s.CreateNewLight()
+	}
 }
 
 func (ed *Editor) CreatePluginProject(path string) {
@@ -388,7 +366,9 @@ func (ed *Editor) saveNewStage(name string) {
 	if ps.EntryPointStage == "" {
 		ps.EntryPointStage = id
 		ps.Save(ed.project.FileSystem())
-		ed.workspaces.settings.RequestReload()
+		if s, ok := workspaceAs[*settings_workspace.SettingsWorkspace](ed, settings_workspace.ID); ok {
+			s.RequestReload()
+		}
 	}
 }
 

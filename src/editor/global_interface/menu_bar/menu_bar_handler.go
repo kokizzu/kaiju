@@ -45,6 +45,14 @@ import (
 	"kaijuengine.com/editor/project/project_file_system"
 )
 
+// WorkspaceTab is the data the menu bar template needs to render one tab in
+// the workspace tab strip. The list is supplied by the editor on initial load
+// and again after workspace registration / settings changes.
+type WorkspaceTab struct {
+	ID          string
+	DisplayName string
+}
+
 type MenuBarHandler interface {
 	BlurInterface()
 	FocusInterface()
@@ -53,12 +61,10 @@ type MenuBarHandler interface {
 	History() *memento.History
 	Project() *project.Project
 	ProjectFileSystem() *project_file_system.FileSystem
-	StageWorkspaceSelected()
-	ContentWorkspaceSelected()
-	ShadingWorkspaceSelected()
-	VfxWorkspaceSelected()
-	UIWorkspaceSelected()
-	SettingsWorkspaceSelected()
+	// WorkspaceSelected is invoked when the user clicks a tab. The id is
+	// the workspace id supplied via WorkspaceTab.ID, which is the same id
+	// the workspace itself registered under.
+	WorkspaceSelected(id string)
 	StageView() *editor_stage_view.StageView
 	Build(buildMode project.GameBuildMode)
 	BuildAndRun(buildMode project.GameBuildMode)

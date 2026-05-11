@@ -62,23 +62,74 @@ import (
 )
 
 type MenuBar struct {
+	host          *engine.Host
 	doc           *document.Document
 	uiMan         ui.Manager
 	selectedPopup *document.Element
 	handler       MenuBarHandler
+	tabs          []WorkspaceTab
+	activeTabID   string
 }
 
 type menuBarTemplateData struct {
-	ShowGrid bool
+	ShowGrid       bool
+	WorkspaceTabs  []WorkspaceTab
+	ActiveTabID    string
 }
 
 func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 	defer tracing.NewRegion("MenuBar.Initialize").End()
+	b.host = host
 	b.handler = handler
 	b.uiMan.Init(host)
-	var err error
-	tplData := menuBarTemplateData{ShowGrid: handler.Settings().ShowGrid}
-	b.doc, err = markup.DocumentFromHTMLAsset(&b.uiMan, "editor/ui/global/menu_bar.go.html",
+	return b.renderDocument()
+}
+
+// RebuildWorkspaceTabs replaces the menu bar's workspace tab strip with the
+// given ordered list and marks activeID as selected. Called by the editor
+// after workspace registration / settings changes. Re-renders the document
+// (popup state is rebuilt; this is rare enough that the cost is acceptable).
+func (b *MenuBar) RebuildWorkspaceTabs(tabs []WorkspaceTab, activeID string) {
+	defer tracing.NewRegion("MenuBar.RebuildWorkspaceTabs").End()
+	b.tabs = make([]WorkspaceTab, len(tabs))
+	copy(b.tabs, tabs)
+	b.activeTabID = activeID
+	if err := b.renderDocument(); err != nil {
+		slog.Error("failed to rebuild menu bar tabs", "error", err)
+	}
+}
+
+// SetActiveTab updates the selected tab styling without rebuilding the
+// document. Used on every workspace switch.
+func (b *MenuBar) SetActiveTab(id string) {
+	defer tracing.NewRegion("MenuBar.SetActiveTab").End()
+	b.activeTabID = id
+	if b.doc == nil {
+		return
+	}
+	tabs := b.doc.GetElementsByGroup("tabs")
+	for i := range tabs {
+		if tabs[i].Attribute("data-workspace-id") == id {
+			b.doc.SetElementClassesWithoutApply(tabs[i], "workspaceTab", "edPanelBgHoverable", "tabSelected")
+		} else {
+			b.doc.SetElementClassesWithoutApply(tabs[i], "workspaceTab", "edPanelBgHoverable")
+		}
+	}
+	b.doc.ApplyStyles()
+}
+
+func (b *MenuBar) renderDocument() error {
+	defer tracing.NewRegion("MenuBar.renderDocument").End()
+	if b.doc != nil {
+		b.doc.Destroy()
+		b.doc = nil
+	}
+	tplData := menuBarTemplateData{
+		ShowGrid:      b.handler.Settings().ShowGrid,
+		WorkspaceTabs: b.tabs,
+		ActiveTabID:   b.activeTabID,
+	}
+	doc, err := markup.DocumentFromHTMLAsset(&b.uiMan, "editor/ui/global/menu_bar.go.html",
 		tplData, map[string]func(*document.Element){
 			"clickLogo":                b.openMenuTarget,
 			"clickFile":                b.openMenuTarget,
@@ -88,13 +139,7 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"clickHelp":                b.openMenuTarget,
 			"clickToggleGrid":          b.clickToggleGrid,
 			"clickScreenshot":          b.clickScreenshot,
-			"clickStage":               b.clickStage,
-			"clickContent":             b.clickContent,
-			"clickShading":             b.clickShading,
-			"clickVfx":                 b.clickVfx,
-			"clickAnimation":           b.clickAnimation,
-			"clickUI":                  b.clickUI,
-			"clickSettings":            b.clickSettings,
+			"clickWorkspace":           b.clickWorkspace,
 			"clickNewStage":            b.clickNewStage,
 			"clickOpenStage":           b.clickOpenStage,
 			"clickSaveStage":           b.clickSaveStage,
@@ -128,6 +173,10 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"clickSponsors":            b.clickSponsors,
 			"popupMiss":                b.popupMiss,
 		})
+	if err != nil {
+		return err
+	}
+	b.doc = doc
 	b.doc.Clean()
 	for _, m := range b.doc.GetElementsByClass("menuEntry") {
 		target := m.Attribute("data-target")
@@ -136,7 +185,7 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 	}
 	b.doc.Clean()
 	b.hidePopups()
-	return err
+	return nil
 }
 
 func (b *MenuBar) Focus() { b.uiMan.EnableUpdate() }
@@ -144,41 +193,6 @@ func (b *MenuBar) Blur()  { b.uiMan.DisableUpdate() }
 
 func (b *MenuBar) IsFocusedOnInput() bool {
 	return b.uiMan.Group.IsFocusedOnInput()
-}
-
-func (b *MenuBar) SetWorkspaceStage() {
-	t, _ := b.doc.GetElementById("tabStage")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceContent() {
-	t, _ := b.doc.GetElementById("tabContent")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceShading() {
-	t, _ := b.doc.GetElementById("tabShading")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceVfx() {
-	t, _ := b.doc.GetElementById("tabVfx")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceAnimation() {
-	t, _ := b.doc.GetElementById("tabAnimation")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceUI() {
-	t, _ := b.doc.GetElementById("tabUI")
-	b.selectTab(t)
-}
-
-func (b *MenuBar) SetWorkspaceSettings() {
-	t, _ := b.doc.GetElementById("tabSettings")
-	b.selectTab(t)
 }
 
 func (b *MenuBar) setPopupUiPos(e *document.Element, pop *document.Element) {
@@ -210,45 +224,17 @@ func (b *MenuBar) openMenuTarget(e *document.Element) {
 	}
 }
 
-func (b *MenuBar) clickStage(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickStage").End()
-	b.selectTab(e)
-	b.handler.StageWorkspaceSelected()
-}
-
-func (b *MenuBar) clickContent(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickContent").End()
-	b.selectTab(e)
-	b.handler.ContentWorkspaceSelected()
-}
-
-func (b *MenuBar) clickShading(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickShading").End()
-	b.selectTab(e)
-	b.handler.ShadingWorkspaceSelected()
-}
-
-func (b *MenuBar) clickVfx(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickAnimation").End()
-	b.selectTab(e)
-	b.handler.VfxWorkspaceSelected()
-}
-
-func (b *MenuBar) clickAnimation(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickAnimation").End()
-	b.selectTab(e)
-}
-
-func (b *MenuBar) clickUI(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickUI").End()
-	b.selectTab(e)
-	b.handler.UIWorkspaceSelected()
-}
-
-func (b *MenuBar) clickSettings(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.clickSettings").End()
-	b.selectTab(e)
-	b.handler.SettingsWorkspaceSelected()
+// clickWorkspace is the single shared click handler for all workspace tabs.
+// It reads the workspace id from the data-workspace-id attribute and asks the
+// editor to switch. The editor's setWorkspaceState in turn calls SetActiveTab
+// to keep the visual state in sync.
+func (b *MenuBar) clickWorkspace(e *document.Element) {
+	defer tracing.NewRegion("MenuBar.clickWorkspace").End()
+	id := e.Attribute("data-workspace-id")
+	if id == "" {
+		return
+	}
+	b.handler.WorkspaceSelected(id)
 }
 
 func (b *MenuBar) clickNewStage(*document.Element) {
@@ -580,17 +566,6 @@ func (b *MenuBar) popupMiss(e *document.Element) {
 	if e == b.selectedPopup {
 		b.hidePopups()
 	}
-}
-
-func (b *MenuBar) selectTab(e *document.Element) {
-	defer tracing.NewRegion("MenuBar.selectTab").End()
-	tabs := b.doc.GetElementsByGroup("tabs")
-	for i := range tabs {
-		b.doc.SetElementClassesWithoutApply(tabs[i], "workspaceTab", "edPanelBgHoverable")
-	}
-	b.doc.SetElementClassesWithoutApply(e, "workspaceTab", "edPanelBgHoverable", "tabSelected")
-	b.doc.ApplyStyles()
-	b.hidePopups()
 }
 
 func (b *MenuBar) hidePopups() {

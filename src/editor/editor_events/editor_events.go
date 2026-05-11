@@ -72,6 +72,23 @@ type EditorEvents struct {
 	OnTagRemoved events.EventWithArg[TagEvent]
 
 	OnTagAdded events.EventWithArg[TagEvent]
+
+	// OnRequestOpenStage asks the stage workspace to open the stage with the
+	// given content id and switch itself active. Used for cross-workspace
+	// requests instead of a hard-coded method on the editor.
+	OnRequestOpenStage events.EventWithArg[string]
+
+	// OnRequestViewHtmlUi asks the UI workspace to load the given HTML
+	// content id and switch itself active.
+	OnRequestViewHtmlUi events.EventWithArg[string]
+
+	// OnRequestOpenParticleSystem asks the VFX workspace to open the given
+	// particle system content id and switch itself active.
+	OnRequestOpenParticleSystem events.EventWithArg[string]
+
+	// OnRequestOpenShadingSpec asks the shading workspace to open the given
+	// shader / material / render pass content id and switch itself active.
+	OnRequestOpenShadingSpec events.EventWithArg[string]
 }
 
 type TagEvent struct {

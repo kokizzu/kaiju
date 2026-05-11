@@ -99,4 +99,23 @@ func (w *CommonWorkspace) IsFocusedOnInput() bool {
 	return w.UiMan.Group.IsFocusedOnInput()
 }
 
+// CommonShutdown tears down the workspace's UI document AND its UI manager.
+// Called by a workspace's Shutdown() implementation when the editor disables
+// the workspace at runtime. Embedding workspaces should drop any event
+// subscriptions before calling this.
+//
+// The UiMan.Shutdown call is critical: without it, a subsequent re-init
+// (when the workspace is re-enabled) would call UiMan.Init a second time,
+// adding a second host.UIUpdater callback for the same Manager. Two
+// concurrent updates would then race on the same Manager's iteration
+// slices and panic with index-out-of-range.
+func (w *CommonWorkspace) CommonShutdown() {
+	defer tracing.NewRegion("CommonWorkspace.CommonShutdown").End()
+	if w.Doc != nil {
+		w.Doc.Destroy()
+		w.Doc = nil
+	}
+	w.UiMan.Shutdown()
+}
+
 func (w *CommonWorkspace) Update(float64) {}

@@ -65,6 +65,24 @@ type Settings struct {
 	EditorCamera   EditorCameraSettings
 	Snapping       SnapSettings
 	BuildTools     BuildToolSettings
+	// Workspaces is the persisted enable / visible / order state for every
+	// known workspace, keyed by Workspace.ID(). Slice order is the load /
+	// tab order. The editor's reconcile step on startup adds defaults for
+	// any registered workspace that is missing from this slice and drops
+	// entries whose workspace is no longer registered. Hidden from the
+	// reflection-rendered settings UI because the Workspaces panel renders
+	// it with a bespoke drag-to-reorder + toggle layout.
+	Workspaces []WorkspaceConfig `visible:"false"`
+}
+
+// WorkspaceConfig is a single workspace's persisted state.
+//
+// Enabled=false skips initialization entirely: the workspace is not added
+// to the active set, its tab is not rendered, and event subscriptions are
+// not wired up. Enabled=true means initialized and tabbed.
+type WorkspaceConfig struct {
+	ID      string `visible:"false"`
+	Enabled bool
 }
 
 type EditorCameraSettings struct {

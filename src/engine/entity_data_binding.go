@@ -52,6 +52,26 @@ type EntityData interface {
 	Init(entity *Entity, host *Host)
 }
 
+type EntityDataPhase int
+
+const (
+	EntityDataPhaseDefault EntityDataPhase = iota * 100
+	EntityDataPhasePhysicsConstraint
+)
+
+const EntityDataPhasePhysicsBody = EntityDataPhaseDefault
+
+type EntityDataInitPhaser interface {
+	EntityDataInitPhase() EntityDataPhase
+}
+
+func EntityDataInitPhase(data EntityData) EntityDataPhase {
+	if phased, ok := data.(EntityDataInitPhaser); ok {
+		return phased.EntityDataInitPhase()
+	}
+	return EntityDataPhaseDefault
+}
+
 func RegisterEntityData(value EntityData) error {
 	var err error
 	defer func() {

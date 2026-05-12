@@ -38,13 +38,13 @@ package loaders
 
 import (
 	"kaijuengine.com/engine"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/rendering/loaders/load_result"
 )
 
 func TrySelectResultMesh(mesh *load_result.Mesh,
-	e *engine.Entity, ray collision.Ray) (matrix.Float, bool) {
+	e *engine.Entity, ray graviton.Ray) (matrix.Float, bool) {
 	const rayLen = 10000.0
 	p, _, s := e.Transform.WorldTransform()
 	rad := mesh.ScaledRadius(s)

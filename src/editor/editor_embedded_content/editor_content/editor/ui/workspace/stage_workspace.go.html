@@ -187,9 +187,78 @@
 			.entityDataListEntry {
 				width: 100%;
 				background-color: #282828;
+				color: #AAA;
+				padding: 0.35em;
+				margin-bottom: 0.2em;
 			}
 			.entityDataListEntry:hover {
 				background-color: #353535;
+				color: white;
+			}
+			.addEntityDataButton {
+				width: calc(100% - 2em);
+				height: 2em;
+				margin: 0.25em;
+				background-color: #282828;
+				color: #AAA;
+				border: 2px solid #575757;
+			}
+			.addEntityDataButton:hover {
+				background-color: #575757;
+				color: white;
+			}
+			#entityDataSelectorOverlay {
+				position: absolute;
+				left: 0;
+				top: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0, 0, 0, 0.65);
+				z-index: 80;
+			}
+			#entityDataSelectorWindow {
+				position: absolute;
+				width: 50%;
+				height: 65%;
+				left: 50%;
+				top: 50%;
+				transform: translate(-50% -50%);
+				color: white;
+				background-color: #121212;
+				border: 5px solid #575757;
+				border-radius: 5px;
+				padding: 1em;
+			}
+			#entityDataSelectorHeader {
+				height: 2em;
+				margin-bottom: 0.5em;
+			}
+			#entityDataSelectorHeader span {
+				width: calc(100% - 2em);
+				font-size: 1.1em;
+			}
+			#entityDataSelectorHeader button {
+				width: 2em;
+				height: 2em;
+				font-family: 'MaterialIcons-Regular';
+				background-color: #282828;
+				color: #AAA;
+				border: 2px solid #575757;
+			}
+			#entityDataSelectorHeader button:hover {
+				background-color: #575757;
+				color: white;
+			}
+			#entityDataSearch {
+				width: 100%;
+				height: 2em;
+				margin-left: 0;
+				margin-bottom: 0.5em;
+			}
+			#entityDataList {
+				width: 100%;
+				height: calc(100% - 5em);
+				overflow-y: scroll;
 			}
 			.dataInput {
 				width: 100%;
@@ -217,6 +286,26 @@
 			}
 			.dataContentId .dragHover {
 				background-color: #682A2D;
+			}
+			.dataEntityId {
+				display: inline-block;
+				width: calc(100% - 2em);
+				background-color: #282828;
+				color: #AAA;
+				border: 2px solid black;
+			}
+			.dataEntityId.dragHover {
+				background-color: #26465F;
+			}
+			.dataEntityIdInvalid {
+				color: #FFB3B3;
+				border-color: #A33;
+			}
+			.dataEntityIdClear {
+				width: 1.5em;
+				height: 1.5em;
+				font-size: 0.7em;
+				font-family: 'MaterialIcons-Regular';
 			}
 			.center { text-align: center; }
 			.dataControls {
@@ -374,14 +463,30 @@
 								<div>
 									<div class="dataContentId" data-type="" onclick="clickSelectContentId" ondrop="contentIdDrop" ondragenter="contentIdDragEnter" ondragleave="contentIdDragExit">empty &lpar;TypeName&rpar;</div>
 								</div>
+								<!-- EntityId input -->
+								<div>
+									<div class="dataEntityId" data-entityid="" onclick="clickSelectEntityId" ondrop="entityIdDrop" ondragenter="entityIdDragEnter" ondragleave="entityIdDragExit">empty &lpar;Entity&rpar;</div>
+									<button class="dataEntityIdClear" onclick="clearEntityId">&#xE14C;</button>
+								</div>
 							</div>
 						</div>
 					</div>
-					<div><span>Add data, or </span><button class="pasteIcon" onclick="pasteEntityDataAsNew">&#xE14F;</button></div>
-					<input type="text" placeholder="Find entity data..." onchange="searchEntityData" />
-					<div id="entityDataList">
-						<div id="entityDataListTemplate" class="entityDataListEntry" onclick="addEntityData">Name...</div>
+					<div>
+						<button class="addEntityDataButton" onclick="showEntityDataSelector">Add entity data</button>
+						<button class="pasteIcon" onclick="pasteEntityDataAsNew">&#xE14F;</button>
 					</div>
+				</div>
+			</div>
+		</div>
+		<div id="entityDataSelectorOverlay">
+			<div id="entityDataSelectorWindow">
+				<div id="entityDataSelectorHeader">
+					<span>Add entity data</span>
+					<button onclick="closeEntityDataSelector">&#xE14C;</button>
+				</div>
+				<input id="entityDataSearch" type="text" placeholder="Search entity data..." onchange="searchEntityData" onkeyup="searchEntityData" />
+				<div id="entityDataList">
+					<div id="entityDataListTemplate" class="entityDataListEntry" onclick="addEntityData">Name...</div>
 				</div>
 			</div>
 		</div>

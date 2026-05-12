@@ -42,7 +42,7 @@ import (
 	"kaijuengine.com/editor/editor_settings"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
@@ -167,7 +167,7 @@ func (e *EditorCamera) Update(host *engine.Host, delta float64) (changed bool) {
 	}
 }
 
-func (e *EditorCamera) RayCast(mouse *hid.Mouse) collision.Ray {
+func (e *EditorCamera) RayCast(mouse *hid.Mouse) graviton.Ray {
 	defer tracing.NewRegion("EditorCamera.RayCast").End()
 	if e.mode == EditorCameraMode2d {
 		return e.camera.RayCast(mouse.ScreenPosition())
@@ -176,7 +176,7 @@ func (e *EditorCamera) RayCast(mouse *hid.Mouse) collision.Ray {
 	}
 }
 
-func (e *EditorCamera) Focus(bounds collision.AABB) {
+func (e *EditorCamera) Focus(bounds graviton.AABB) {
 	defer tracing.NewRegion("EditorCamera.Focus").End()
 	z := bounds.Extent.Length()
 	if z <= 0.01 {

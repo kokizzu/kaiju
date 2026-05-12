@@ -43,7 +43,7 @@ import (
 	"math"
 	"unsafe"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/rendering"
 )
@@ -240,7 +240,7 @@ func writeRawSlice[T any](w *nativeMeshWriter, values []T) {
 	w.bytes(unsafe.Slice((*byte)(unsafe.Pointer(&values[0])), size))
 }
 
-func (w *nativeMeshWriter) triangleBVH(bvh *collision.TriangleBVH) {
+func (w *nativeMeshWriter) triangleBVH(bvh *graviton.TriangleBVH) {
 	w.bool(bvh != nil)
 	if w.err != nil || bvh == nil {
 		return
@@ -413,7 +413,7 @@ func readRawSlice[T any](r *nativeMeshReader) ([]T, error) {
 	return values, nil
 }
 
-func (r *nativeMeshReader) triangleBVH() (*collision.TriangleBVH, error) {
+func (r *nativeMeshReader) triangleBVH() (*graviton.TriangleBVH, error) {
 	hasBVH, err := r.bool()
 	if err != nil {
 		return nil, err
@@ -421,7 +421,7 @@ func (r *nativeMeshReader) triangleBVH() (*collision.TriangleBVH, error) {
 	if !hasBVH {
 		return nil, nil
 	}
-	bvh := &collision.TriangleBVH{}
+	bvh := &graviton.TriangleBVH{}
 	if err := readRaw(r, &bvh.Bounds); err != nil {
 		return nil, err
 	}

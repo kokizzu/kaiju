@@ -36,9 +36,15 @@
 
 package pooling
 
-import "sync"
+import (
+	"sync"
 
-type PoolGroupId = int
+	"kaijuengine.com/build"
+	"kaijuengine.com/platform/concurrent"
+)
+
+type PoolGroupId = int // This is actually just 3 bytes
+const MaxPoolGroupId = 0x00FFFFFF
 
 type PoolGroup[T any] struct {
 	pools []*Pool[T]
@@ -64,12 +70,17 @@ func (p *PoolGroup[T]) selectPool() (*Pool[T], PoolGroupId) {
 	p.pools = append(p.pools, &Pool[T]{})
 	last := len(p.pools) - 1
 	p.pools[last].init()
+	if build.Debug {
+		if len(p.pools) > MaxPoolGroupId {
+			panic("the pool amount has gone beyond the allowed limit")
+		}
+	}
 	return p.pools[last], last
 }
 
 func (p *PoolGroup[T]) Clear() {
 	for i := range p.pools {
-		for j, idx := ElementsInPool-1, 0; i >= 0; i-- {
+		for j, idx := ElementsInPool-1, 0; j >= 0; j-- {
 			p.pools[i].available[idx] = PoolIndex(j)
 			idx++
 		}
@@ -118,6 +129,11 @@ func (p *PoolGroup[T]) Reserve(additionalElements int) {
 		p.pools = append(p.pools, &Pool[T]{})
 		p.pools[len(p.pools)-1].init()
 	}
+	if build.Debug {
+		if len(p.pools) > MaxPoolGroupId {
+			panic("the pool amount has gone beyond the allowed limit")
+		}
+	}
 }
 
 // Each will iterate through every element, both active and inactive element in
@@ -139,6 +155,15 @@ func (p *PoolGroup[T]) Each(each func(elm *T)) {
 			each(&p.pools[i].elements[p.pools[i].taken[j]])
 		}
 	}
+}
+
+func (p *PoolGroup[T]) EachParallel(workName string, workGroup *concurrent.WorkGroup, threads *concurrent.Threads, each func(elm *T)) {
+	for i := range p.pools {
+		for j := range p.pools[i].takenLen {
+			workGroup.Add(workName, func() { each(&p.pools[i].elements[p.pools[i].taken[j]]) })
+		}
+	}
+	workGroup.Execute(workName, threads)
 }
 
 // ConditionalEach iterates over each active element in the pool group, invoking the

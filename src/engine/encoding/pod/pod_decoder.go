@@ -164,6 +164,22 @@ func (d Decoder) decodeFieldsForType(val reflect.Value, typeLookup, fieldLookup 
 		reflect.Complex64, reflect.Complex128,
 		reflect.String:
 		return d.decodePrimitive(val)
+	case reflect.Int:
+		// Encoded as int32 by the encoder
+		var v int32
+		if err := klib.BinaryRead(d.r, &v); err != nil {
+			return fmt.Errorf("failed to read int value: %w", err)
+		}
+		val.SetInt(int64(v))
+		return nil
+	case reflect.Uint:
+		// Encoded as uint32 by the encoder
+		var v uint32
+		if err := klib.BinaryRead(d.r, &v); err != nil {
+			return fmt.Errorf("failed to read uint value: %w", err)
+		}
+		val.SetUint(uint64(v))
+		return nil
 	default:
 		return fmt.Errorf("unsupported kind for decoding: %v", val.Kind())
 	}

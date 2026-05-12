@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"reflect"
+	"sort"
 
 	"kaijuengine.com/build"
 	"kaijuengine.com/debug"
@@ -62,8 +63,9 @@ type Stage struct {
 }
 
 type LoadResult struct {
-	Roots    []*engine.Entity
-	Entities []*engine.Entity
+	Roots        []*engine.Entity
+	Entities     []*engine.Entity
+	EntitiesById map[engine.EntityId]*engine.Entity
 }
 
 type StageJson struct {
@@ -264,12 +266,32 @@ func EntityDescriptionArchiveDeserializer(rawData []byte) (EntityDescription, er
 }
 
 func (s *Stage) Load(host *engine.Host) LoadResult {
-	res := LoadResult{}
-	entityBindings := []func(){}
+	res := LoadResult{
+		EntitiesById: make(map[engine.EntityId]*engine.Entity),
+	}
+	type entityBindingInit struct {
+		phase engine.EntityDataPhase
+		init  func()
+	}
+	entityBindings := []entityBindingInit{}
+	addEntityBinding := func(data engine.EntityData, entity *engine.Entity) {
+		entityBindings = append(entityBindings, entityBindingInit{
+			phase: engine.EntityDataInitPhase(data),
+			init: func() {
+				data.Init(entity, host)
+			},
+		})
+	}
 	var proc func(se *EntityDescription, parent *engine.Entity)
 	proc = func(se *EntityDescription, parent *engine.Entity) {
 		e := engine.NewEntity(host.WorkGroup())
 		res.Entities = append(res.Entities, e)
+		if se.Id != "" {
+			id := engine.EntityId(se.Id)
+			if host.SetEntityId(e, id) {
+				res.EntitiesById[id] = e
+			}
+		}
 		if parent != nil {
 			e.SetParent(parent)
 		} else {
@@ -291,18 +313,19 @@ func (s *Stage) Load(host *engine.Host) LoadResult {
 						engine.ReflectValueFromJson(v, f)
 					}
 					reflect.ValueOf(&b).Elem().Set(nb)
-					entityBindings = append(entityBindings, func() {
-						b.Init(e, host)
-					})
+					addEntityBinding(b, e)
 				} else {
 					slog.Error("failed to locate the registered key", "key", se.DataBinding[i].RegistraionKey)
 				}
 			}
 		} else {
 			for i := range se.RawDataBinding {
-				entityBindings = append(entityBindings, func() {
-					se.RawDataBinding[i].(engine.EntityData).Init(e, host)
-				})
+				if data, ok := se.RawDataBinding[i].(engine.EntityData); ok {
+					addEntityBinding(data, e)
+				} else {
+					slog.Error("raw data binding does not implement engine.EntityData",
+						"type", reflect.TypeOf(se.RawDataBinding[i]))
+				}
 			}
 		}
 		if se.Mesh != "" {
@@ -317,8 +340,11 @@ func (s *Stage) Load(host *engine.Host) LoadResult {
 	for i := range s.Entities {
 		proc(&s.Entities[i], nil)
 	}
+	sort.SliceStable(entityBindings, func(i, j int) bool {
+		return entityBindings[i].phase < entityBindings[j].phase
+	})
 	for i := range entityBindings {
-		entityBindings[i]()
+		entityBindings[i].init()
 	}
 	return res
 }

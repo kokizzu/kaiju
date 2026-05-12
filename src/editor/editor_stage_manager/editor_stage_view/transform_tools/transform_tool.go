@@ -48,7 +48,7 @@ import (
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/assets"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/hid"
 	"kaijuengine.com/platform/profiler/tracing"
@@ -302,7 +302,7 @@ func (t *TransformTool) checkKeyboard(kb *hid.Keyboard) {
 	}
 }
 
-func (t *TransformTool) findPlaneHitPoint(r collision.Ray, center matrix.Vec3) matrix.Vec3 {
+func (t *TransformTool) findPlaneHitPoint(r graviton.Ray, center matrix.Vec3) matrix.Vec3 {
 	defer tracing.NewRegion("TransformTool.findPlaneHitPoint").End()
 	nml := matrix.Vec3Forward()
 	var df, db, dl, dr, du, dd matrix.Float = -1.0, -1.0, -1.0, -1.0, -1.0, -1.0

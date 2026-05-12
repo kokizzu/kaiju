@@ -282,6 +282,18 @@ func (ed *Editor) CreateNewLight() {
 	ed.workspaces.stage.CreateNewLight()
 }
 
+func (ed *Editor) ConnectSelectedAsDistanceChain() {
+	ed.workspaces.stage.ConnectSelectedAsDistanceChain()
+}
+
+func (ed *Editor) ConnectSelectedAsRope() {
+	ed.workspaces.stage.ConnectSelectedAsRope()
+}
+
+func (ed *Editor) ConnectSelectedAsHingeChain() {
+	ed.workspaces.stage.ConnectSelectedAsHingeChain()
+}
+
 func (ed *Editor) CreatePluginProject(path string) {
 	if err := editor_plugin.CreatePluginProject(path); err == nil {
 		ed.openCodeEditor(path)

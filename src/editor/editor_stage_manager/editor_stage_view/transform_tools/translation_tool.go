@@ -40,7 +40,7 @@ import (
 	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/registry/shader_data_registry"
@@ -83,13 +83,13 @@ type TranslationTool struct {
 type TranslationToolArrow struct {
 	shaderData rendering.DrawInstance
 	transform  matrix.Transform
-	hitBox     collision.AABB
+	hitBox     graviton.AABB
 }
 
 type TranslationToolPlane struct {
 	shaderData rendering.DrawInstance
 	transform  matrix.Transform
-	hitBox     collision.AABB
+	hitBox     graviton.AABB
 }
 
 func (t *TranslationTool) Initialize(host *engine.Host) {
@@ -221,7 +221,7 @@ func (t *TranslationTool) updateHitBoxes() {
 	arrowLen := translationGizmoTotalHeight * scale * 0.5
 	r := matrix.Float(translationGizmoTotalRadius) * scale
 	for i := range t.arrows {
-		t.arrows[i].hitBox = collision.AABB{
+		t.arrows[i].hitBox = graviton.AABB{
 			Center: t.root.Position(),
 			Extent: matrix.NewVec3(r, r, r),
 		}
@@ -240,7 +240,7 @@ func (t *TranslationTool) updateHitBoxes() {
 	r = 0
 	for i := range t.planes {
 		len := matrix.Float(translationGizmoPlaneSideLen * scale)
-		t.planes[i].hitBox = collision.AABB{
+		t.planes[i].hitBox = graviton.AABB{
 			Center: t.planes[i].transform.WorldPosition(),
 			Extent: matrix.NewVec3(len, len, len),
 		}

@@ -57,7 +57,7 @@ import (
 	"kaijuengine.com/editor/project/project_file_system"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/assets"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/stages"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/klib"
@@ -85,15 +85,15 @@ type StageManager struct {
 	history               *memento.History
 	entities              []*StageEntity
 	selected              []*StageEntity
-	worldBVH              *collision.BVH
+	worldBVH              *graviton.BVH
 }
 
 // StageEntityEditorData is the structure holding all the uniquely identifiable
 // and linking data about the entity on this stage. That will include things
 // like content linkage, data bindings, etc.
 type StageEntityEditorData struct {
-	Bvh                   *collision.BVH
-	WorldBvh              *collision.BVH
+	Bvh                   *graviton.BVH
+	WorldBvh              *graviton.BVH
 	Mesh                  *rendering.Mesh
 	ShaderData            rendering.DrawInstance
 	Description           stages.EntityDescription
@@ -115,6 +115,10 @@ func (m *StageManager) NewStage() {
 
 func (m *StageManager) IsNew() bool     { return m.stageId == "" }
 func (m *StageManager) StageId() string { return m.stageId }
+
+func (m *StageManager) Entities() []*StageEntity {
+	return slices.Clone(m.entities)
+}
 
 func (m *StageManager) SetStageId(name string, cache *content_database.Cache) error {
 	defer tracing.NewRegion("StageManager.SetStageId").End()
@@ -159,14 +163,7 @@ func (m *StageManager) AttachEntityData(e *StageEntity, g codegen.GeneratedType)
 func (m *StageManager) duplicateEntity(target *StageEntity, proj *project.Project) (*StageEntity, error) {
 	defer tracing.NewRegion("StageManager.duplicateEntity").End()
 	desc := m.entityToDescription(target)
-	var newId func(d *stages.EntityDescription)
-	newId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			newId(&d.Children[i])
-		}
-	}
-	newId(&desc)
+	regenerateEntityIdsAndRewriteReferences(&desc, proj)
 	return m.importEntityByDescription(m.host, proj, EntityToStageEntity(target.Parent), &desc)
 }
 
@@ -177,6 +174,7 @@ func (m *StageManager) AddEntityWithId(id, name string, point matrix.Vec3) *Stag
 	defer tracing.NewRegion("StageManager.AddEntityWithId").End()
 	e := &StageEntity{}
 	e.Init(m.host.WorkGroup())
+	m.host.SetEntityId(&e.Entity, engine.EntityId(id))
 	e.SetName(name)
 	e.StageData.Description.Id = id
 	e.Transform.SetPosition(point)
@@ -357,13 +355,13 @@ func (m *StageManager) AddBVH(e *StageEntity) {
 	if e.StageData.WorldBvh != nil {
 		m.RemoveEntityBVH(e)
 	}
-	e.StageData.WorldBvh = collision.AddSubBVH(&m.worldBVH,
+	e.StageData.WorldBvh = graviton.AddSubBVH(&m.worldBVH,
 		e.StageData.Bvh, &e.Transform)
 }
 
-//func (m *StageManager) RemoveBVH(bvh *collision.BVH) {
+//func (m *StageManager) RemoveBVH(bvh *graviton.BVH) {
 //	defer tracing.NewRegion("StageManager.RemoveBVH").End()
-//	collision.RemoveSubBVH(&m.worldBVH, bvh)
+//	graviton.RemoveSubBVH(&m.worldBVH, bvh)
 //}
 
 func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
@@ -372,11 +370,11 @@ func (m *StageManager) RemoveEntityBVH(e *StageEntity) {
 		return
 	}
 	if e.StageData.WorldBvh != nil {
-		collision.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
+		graviton.RemoveBVHNode(&m.worldBVH, e.StageData.WorldBvh)
 		e.StageData.WorldBvh = nil
 		return
 	}
-	collision.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
+	graviton.RemoveAllLeavesMatchingTransform(&m.worldBVH, &e.Transform)
 }
 
 // entityToTemplate is a wrapper around [entityToDescription] so that the
@@ -633,14 +631,7 @@ func (m *StageManager) SpawnTemplate(host *engine.Host, proj *project.Project, c
 	}
 	desc.Position = point
 	desc.TemplateId = cc.Id()
-	var generateId func(d *stages.EntityDescription)
-	generateId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			generateId(&d.Children[i])
-		}
-	}
-	generateId(&desc)
+	regenerateEntityIdsAndRewriteReferences(&desc, proj)
 	e, err := m.importEntityByDescription(host, proj, nil, &desc)
 	if err != nil {
 		slog.Error("failed to spawn the entity from entity template", "path", cc.Path, "error", err)
@@ -801,13 +792,6 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 		return err
 	}
 	m.ClearSelection()
-	var generateId func(d *stages.EntityDescription)
-	generateId = func(d *stages.EntityDescription) {
-		d.Id = uuid.NewString()
-		for i := range d.Children {
-			generateId(&d.Children[i])
-		}
-	}
 	for i := range m.entities {
 		if m.entities[i].StageData.Description.TemplateId != templateId {
 			continue
@@ -816,7 +800,7 @@ func (m *StageManager) updateExistingTemplateInstances(skip *StageEntity, host *
 			continue
 		}
 		cpy := tpl
-		generateId(&cpy)
+		regenerateEntityIdsAndRewriteReferences(&cpy, proj)
 		t := m.entities[i].Transform
 		m.OnEntityDestroy.Execute(m.entities[i])
 		m.host.DestroyEntity(&m.entities[i].Entity)

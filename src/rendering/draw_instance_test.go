@@ -40,7 +40,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 )
 
@@ -61,10 +61,10 @@ func (d *testDrawInstance) InstanceBoundDataSize() int       { return int(unsafe
 type testViewCuller struct {
 	inView      bool
 	viewChanged bool
-	seen        collision.AABB
+	seen        graviton.AABB
 }
 
-func (c *testViewCuller) IsInView(box collision.AABB) bool {
+func (c *testViewCuller) IsInView(box graviton.AABB) bool {
 	c.seen = box
 	return c.inView
 }
@@ -129,7 +129,7 @@ func TestShaderDataBaseActivationAndDestroy(t *testing.T) {
 
 func TestShaderDataBaseTransformModelAndBounds(t *testing.T) {
 	base := NewShaderDataBase()
-	container := collision.AABBFromMinMax(matrix.Vec3{-1, -1, -1}, matrix.Vec3{1, 1, 1})
+	container := graviton.AABBFromMinMax(matrix.Vec3{-1, -1, -1}, matrix.Vec3{1, 1, 1})
 	base.UpdateModel(nil, container)
 	if base.renderBounds() != container {
 		t.Fatalf("no-transform bounds = %+v, want %+v", base.renderBounds(), container)
@@ -154,12 +154,12 @@ func TestShaderDataBaseTransformModelAndBounds(t *testing.T) {
 func TestShaderDataBaseCulling(t *testing.T) {
 	base := NewShaderDataBase()
 	culler := &testViewCuller{inView: false, viewChanged: true}
-	base.UpdateModel(culler, collision.AABBFromWidth(matrix.Vec3Zero(), 1))
+	base.UpdateModel(culler, graviton.AABBFromWidth(matrix.Vec3Zero(), 1))
 	if !base.viewCulled || base.IsInView() {
 		t.Fatalf("out-of-view culling was not applied")
 	}
 	culler.inView = true
-	base.UpdateModel(culler, collision.AABBFromWidth(matrix.Vec3Zero(), 1))
+	base.UpdateModel(culler, graviton.AABBFromWidth(matrix.Vec3Zero(), 1))
 	if base.viewCulled || !base.IsInView() {
 		t.Fatalf("in-view culling was not applied")
 	}

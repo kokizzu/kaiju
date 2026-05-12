@@ -114,6 +114,9 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"clickCreateEntityData":    b.clickCreateEntityData,
 			"clickCreateHtmlUi":        b.clickCreateHtmlUi,
 			"clickCreateCssStylesheet": b.clickCreateCssStylesheet,
+			"clickDistanceChain":       b.clickDistanceChain,
+			"clickRope":                b.clickRope,
+			"clickHingeChain":          b.clickHingeChain,
 			"clickNewCamera":           b.clickNewCamera,
 			"clickNewEntity":           b.clickNewEntity,
 			"clickNewLight":            b.clickNewLight,
@@ -340,6 +343,24 @@ func (b *MenuBar) clickCreateCssStylesheet(*document.Element) {
 			b.handler.CreateCssStylesheetFile(name)
 		},
 	})
+}
+
+func (b *MenuBar) clickDistanceChain(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickDistanceChain").End()
+	b.hidePopups()
+	b.handler.ConnectSelectedAsDistanceChain()
+}
+
+func (b *MenuBar) clickRope(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickRope").End()
+	b.hidePopups()
+	b.handler.ConnectSelectedAsRope()
+}
+
+func (b *MenuBar) clickHingeChain(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickHingeChain").End()
+	b.hidePopups()
+	b.handler.ConnectSelectedAsHingeChain()
 }
 
 func (b *MenuBar) clickOpenCodeEditor(*document.Element) {

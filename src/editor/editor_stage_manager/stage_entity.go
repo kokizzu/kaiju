@@ -61,6 +61,8 @@ func EntityToStageEntity(e *engine.Entity) *StageEntity {
 
 func (e *StageEntity) DataBindings() []*entity_data_binding.EntityDataEntry { return e.dataBindings }
 
+func (e *StageEntity) IsDeleted() bool { return e.isDeleted }
+
 func (e *StageEntity) DetachDataBinding(binding *entity_data_binding.EntityDataEntry) {
 	for i, b := range e.dataBindings {
 		if b == binding {

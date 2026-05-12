@@ -317,7 +317,9 @@ func (hui *WorkspaceHierarchyUI) entitySelected(e *editor_stage_manager.StageEnt
 			hui.workspace.Value().Doc.SetElementClasses(
 				elm, hui.buildEntityClasses(elm)...)
 			w.Host.RunAfterNextUIClean(func() {
-				hui.entityList.UI.ToPanel().ScrollToChild(elm.UI)
+				if elm.UI.IsActive() {
+					hui.entityList.UI.ToPanel().ScrollToChild(elm.UI)
+				}
 			})
 			break
 		}

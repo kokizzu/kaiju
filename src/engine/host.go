@@ -103,6 +103,7 @@ type Host struct {
 	name              string
 	game              any
 	destroyedEntities []*Entity
+	entitiesById      map[EntityId]*Entity
 	lighting          lighting.LightingInformation
 	timeRunner        []timeRun
 	frameRunner       []frameRun
@@ -152,6 +153,7 @@ func NewHost(name string, logStream *logging.LogStream, assetDb assets.Database)
 		Closing:       false,
 		assetDatabase: assetDb,
 		Drawings:      rendering.NewDrawings(),
+		entitiesById:  make(map[EntityId]*Entity),
 		CloseSignal:   make(chan struct{}, 1),
 		LogStream:     logStream,
 		lighting:      lighting.NewLightingInformation(rendering.MaxLocalLights),
@@ -200,7 +202,7 @@ func (host *Host) Initialize(width, height, x, y int, platformState any) error {
 		return err
 	}
 	host.Window = win
-
+	host.entitiesById = make(map[EntityId]*Entity)
 	host.threads.Start()
 	host.updateThreads.Start()
 	host.uiThreads.Start()
@@ -319,6 +321,45 @@ func (host *Host) AssetDatabase() assets.Database {
 	return host.assetDatabase
 }
 
+// SetEntityId assigns the given identifier to an entity and registers it for
+// host-wide lookup. Duplicate non-empty identifiers are rejected and leave the
+// entity's current identifier unchanged.
+func (host *Host) SetEntityId(entity *Entity, id EntityId) bool {
+	if entity == nil {
+		slog.Error("can't assign id to nil entity", "id", id)
+		return false
+	}
+	if entity.isDestroyed {
+		slog.Error("can't assign id to destroyed entity", "id", id)
+		return false
+	}
+	if entity.id == id {
+		return true
+	}
+	if id != "" {
+		if existing, ok := host.entitiesById[id]; ok && existing != entity {
+			slog.Error("duplicate entity id rejected", "id", id)
+			return false
+		}
+	}
+	host.unregisterEntityId(entity)
+	entity.id = id
+	entity.idHost = weak.Pointer[Host]{}
+	if id != "" {
+		host.entitiesById[id] = entity
+		entity.idHost = weak.Make(host)
+	}
+	return true
+}
+
+// EntityById returns the entity currently registered with the given identifier.
+func (host *Host) EntityById(id EntityId) *Entity {
+	if id == "" || host.entitiesById == nil {
+		return nil
+	}
+	return host.entitiesById[id]
+}
+
 // Plugins returns all of the loaded plugins for the host
 func (host *Host) Plugins() []*plugins.LuaVM {
 	return host.plugins
@@ -384,7 +425,7 @@ func (host *Host) Update(deltaTime float64) {
 	host.Updater.Update(deltaTime)
 	if !build.Editor {
 		if host.physics.IsActive() {
-			host.physics.Update(&host.threads, deltaTime)
+			host.physics.Update(host.WorkGroup(), &host.threads, deltaTime)
 		}
 	}
 	host.LateUpdater.Update(deltaTime)
@@ -585,4 +626,15 @@ func (host *Host) processDestroyedEntities() {
 		host.destroyedEntities[i].ForceCleanup()
 	}
 	host.destroyedEntities = klib.WipeSlice(host.destroyedEntities)
+}
+
+func (host *Host) unregisterEntityId(entity *Entity) {
+	if entity == nil || entity.id == "" || host.entitiesById == nil {
+		return
+	}
+	if host.entitiesById[entity.id] == entity {
+		delete(host.entitiesById, entity.id)
+	}
+	entity.id = ""
+	entity.idHost = weak.Pointer[Host]{}
 }

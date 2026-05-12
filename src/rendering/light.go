@@ -43,7 +43,7 @@ import (
 
 	"kaijuengine.com/engine/assets"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/rendering/vulkan_const"
 )
@@ -244,7 +244,7 @@ func (l *Light) recalculate(camera cameras.Camera) {
 		for i := range csmProjections {
 			// TODO:  This shouldn't happen all the time, when the view changes,
 			// might be best to store it along side the camera frustum?
-			corners := collision.FrustumExtractCorners(camView, csmProjections[i])
+			corners := graviton.FrustumExtractCorners(camView, csmProjections[i])
 			center := corners.Center()
 			lightView.Reset()
 			lightEye := center.Add(l.direction)
@@ -262,7 +262,7 @@ func (l *Light) recalculate(camera cameras.Camera) {
 	l.reset = false
 }
 
-func (l *Light) minMaxFromCorners(view matrix.Mat4, corners collision.FrustumCorners) matrix.Vec3MinMax {
+func (l *Light) minMaxFromCorners(view matrix.Mat4, corners graviton.FrustumCorners) matrix.Vec3MinMax {
 	mm := matrix.NewVec3MinMax()
 	for i := range corners {
 		trf := matrix.Mat4MultiplyVec4(view, corners[i])

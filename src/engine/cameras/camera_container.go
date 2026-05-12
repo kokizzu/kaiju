@@ -36,7 +36,7 @@
 
 package cameras
 
-import "kaijuengine.com/engine/collision"
+import "kaijuengine.com/engine/graviton"
 
 type Container struct {
 	Camera Camera
@@ -48,6 +48,6 @@ func (c *Container) IsValid() bool              { return c.Camera != nil }
 func (c *Container) Equal(other Camera) bool    { return c.Camera == other }
 func (c *Container) ViewChanged() bool          { return c.Camera.IsDirty() }
 
-func (c *Container) IsInView(box collision.AABB) bool {
+func (c *Container) IsInView(box graviton.AABB) bool {
 	return box.IntersectsFrustum(c.Camera.Frustum())
 }

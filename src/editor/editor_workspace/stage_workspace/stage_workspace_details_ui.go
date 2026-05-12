@@ -115,6 +115,8 @@ type WorkspaceDetailsUI struct {
 	detailsEntityDataTable     *document.Element
 	shaderInstanceDataList     *document.Element
 	boundEntityDataList        *document.Element
+	entityDataSelectorOverlay  *document.Element
+	entityDataSearch           *document.Element
 	entityDataList             *document.Element
 	entityDataListTemplate     *document.Element
 	boundEntityDataTemplate    *document.Element
@@ -130,31 +132,38 @@ type WorkspaceDetailsUI struct {
 func (dui *WorkspaceDetailsUI) setupFuncs() map[string]func(*document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.setupFuncs").End()
 	return map[string]func(*document.Element){
-		"submitDetailsName":    dui.submitDetailsName,
-		"setPosX":              dui.setPosX,
-		"setPosY":              dui.setPosY,
-		"setPosZ":              dui.setPosZ,
-		"copyAttribute":        dui.copyAttribute,
-		"pasteAttribute":       dui.pasteAttribute,
-		"setRotX":              dui.setRotX,
-		"setRotY":              dui.setRotY,
-		"setRotZ":              dui.setRotZ,
-		"setScaleX":            dui.setScaleX,
-		"setScaleY":            dui.setScaleY,
-		"setScaleZ":            dui.setScaleZ,
-		"searchEntityData":     dui.searchEntityData,
-		"addEntityData":        dui.addEntityData,
-		"changeData":           dui.changeData,
-		"pasteEntityDataAsNew": dui.pasteEntityDataAsNew,
-		"pasteEntityData":      dui.pasteEntityData,
-		"copyEntityData":       dui.copyEntityData,
-		"removeEntityData":     dui.removeEntityData,
-		"changeShaderData":     dui.changeShaderData,
-		"clickSelectContentId": dui.clickSelectContentId,
-		"contentIdDrop":        dui.contentIdDrop,
-		"contentIdDragEnter":   dui.contentIdDragEnter,
-		"contentIdDragExit":    dui.contentIdDragExit,
-		"onRightClick":         dui.onRightClick,
+		"submitDetailsName":       dui.submitDetailsName,
+		"setPosX":                 dui.setPosX,
+		"setPosY":                 dui.setPosY,
+		"setPosZ":                 dui.setPosZ,
+		"copyAttribute":           dui.copyAttribute,
+		"pasteAttribute":          dui.pasteAttribute,
+		"setRotX":                 dui.setRotX,
+		"setRotY":                 dui.setRotY,
+		"setRotZ":                 dui.setRotZ,
+		"setScaleX":               dui.setScaleX,
+		"setScaleY":               dui.setScaleY,
+		"setScaleZ":               dui.setScaleZ,
+		"showEntityDataSelector":  dui.showEntityDataSelector,
+		"closeEntityDataSelector": dui.closeEntityDataSelector,
+		"searchEntityData":        dui.searchEntityData,
+		"addEntityData":           dui.addEntityData,
+		"changeData":              dui.changeData,
+		"pasteEntityDataAsNew":    dui.pasteEntityDataAsNew,
+		"pasteEntityData":         dui.pasteEntityData,
+		"copyEntityData":          dui.copyEntityData,
+		"removeEntityData":        dui.removeEntityData,
+		"changeShaderData":        dui.changeShaderData,
+		"clickSelectContentId":    dui.clickSelectContentId,
+		"contentIdDrop":           dui.contentIdDrop,
+		"contentIdDragEnter":      dui.contentIdDragEnter,
+		"contentIdDragExit":       dui.contentIdDragExit,
+		"clickSelectEntityId":     dui.clickSelectEntityId,
+		"clearEntityId":           dui.clearEntityId,
+		"entityIdDrop":            dui.entityIdDrop,
+		"entityIdDragEnter":       dui.entityIdDragEnter,
+		"entityIdDragExit":        dui.entityIdDragExit,
+		"onRightClick":            dui.onRightClick,
 	}
 }
 
@@ -178,6 +187,8 @@ func (dui *WorkspaceDetailsUI) setup(w *StageWorkspace) {
 	dui.detailsEntityDataTable, _ = w.Doc.GetElementById("detailsEntityDataTable")
 	dui.shaderInstanceDataList, _ = w.Doc.GetElementById("shaderInstanceDataList")
 	dui.boundEntityDataList, _ = w.Doc.GetElementById("boundEntityDataList")
+	dui.entityDataSelectorOverlay, _ = w.Doc.GetElementById("entityDataSelectorOverlay")
+	dui.entityDataSearch, _ = w.Doc.GetElementById("entityDataSearch")
 	dui.entityDataList, _ = w.Doc.GetElementById("entityDataList")
 	dui.entityDataListTemplate, _ = w.Doc.GetElementById("entityDataListTemplate")
 	dui.boundEntityDataTemplate, _ = w.Doc.GetElementById("boundEntityDataTemplate")
@@ -185,6 +196,8 @@ func (dui *WorkspaceDetailsUI) setup(w *StageWorkspace) {
 	man := w.stageView.Manager()
 	man.OnEntitySelected.Add(dui.entitySelected)
 	man.OnEntityDeselected.Add(dui.entityDeselected)
+	man.OnEntitySpawn.Add(func(*editor_stage_manager.StageEntity) { dui.reloadTargetedValues() })
+	man.OnEntityDestroy.Add(func(*editor_stage_manager.StageEntity) { dui.reloadTargetedValues() })
 	w.ed.Project().OnEntityDataUpdated.Add(dui.reloadDataList)
 	dui.reloadDataList(w.ed.Project().EntityData())
 }
@@ -192,7 +205,7 @@ func (dui *WorkspaceDetailsUI) setup(w *StageWorkspace) {
 func (dui *WorkspaceDetailsUI) open() {
 	defer tracing.NewRegion("WorkspaceDetailsUI.open").End()
 	dui.detailsArea.UI.Show()
-	dui.entityDataList.UI.Hide()
+	dui.entityDataSelectorOverlay.UI.Hide()
 	dui.entityDataListTemplate.UI.Hide()
 	dui.boundEntityDataTemplate.UI.Hide()
 	dui.shaderInstanceDataTemplate.UI.Hide()
@@ -358,14 +371,34 @@ func (dui *WorkspaceDetailsUI) setScaleZ(e *document.Element) {
 	dui.applyTransform(transformScale, 2, float32(v))
 }
 
-func (dui *WorkspaceDetailsUI) searchEntityData(e *document.Element) {
-	defer tracing.NewRegion("WorkspaceDetailsUI.searchEntityData").End()
+func (dui *WorkspaceDetailsUI) showEntityDataSelector(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.showEntityDataSelector").End()
+	if len(dui.workspace.Value().stageView.Manager().Selection()) == 0 {
+		return
+	}
+	dui.entityDataSelectorOverlay.UI.Show()
 	dui.entityDataList.UI.Show()
 	dui.entityDataListTemplate.UI.Hide()
-	q := strings.ToLower(e.UI.ToInput().Text())
+	dui.entityDataSearch.UI.ToInput().SetTextWithoutEvent("")
+	dui.filterEntityDataList("")
+	dui.entityDataSearch.UI.ToInput().Focus()
+}
+
+func (dui *WorkspaceDetailsUI) closeEntityDataSelector(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.closeEntityDataSelector").End()
+	dui.entityDataSelectorOverlay.UI.Hide()
+}
+
+func (dui *WorkspaceDetailsUI) searchEntityData(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.searchEntityData").End()
+	dui.filterEntityDataList(e.UI.ToInput().Text())
+}
+
+func (dui *WorkspaceDetailsUI) filterEntityDataList(query string) {
+	q := strings.ToLower(query)
 	for _, c := range dui.entityDataList.Children[1:] {
 		name := strings.ToLower(c.InnerLabel().Text())
-		if q != "" && strings.Contains(name, q) {
+		if q == "" || strings.Contains(name, q) {
 			c.UI.Show()
 		} else {
 			c.UI.Hide()
@@ -393,7 +426,7 @@ func (dui *WorkspaceDetailsUI) addEntityDataBykey(key string) (*entity_data_bind
 	de := w.attachEntityData(target, g)
 	dui.createDataBindingEntry(de, dui.boundEntityDataTemplate)
 	data_binding_renderer.ShowSpecific(de, weak.Make(w.Host), target)
-	dui.entityDataList.UI.Hide()
+	dui.entityDataSelectorOverlay.UI.Hide()
 	w.ed.History().Add(&EntityDataAttachHistory{
 		DetailsWorkspace: dui,
 		Entity:           target,
@@ -456,6 +489,10 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 		if len(fields[i].Children) > 8 {
 			contentIdInput = fields[i].Children[8]
 		}
+		var entityIdInput *document.Element
+		if len(fields[i].Children) > 9 {
+			entityIdInput = fields[i].Children[9]
+		}
 		nameSpan.InnerLabel().SetText(g.Fields[i].Name)
 		fg := &g.Gen.FieldGens[i]
 		v := reflect.ValueOf(g.BoundData).Elem().Field(i)
@@ -497,6 +534,12 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 					str = fmt.Sprintf("empty (%s)", g.Fields[i].Type)
 				}
 				child.InnerLabel().SetText(str)
+			}
+		} else if g.Fields[i].IsEntityId() && entityIdInput != nil {
+			entityIdInput.UI.Show()
+			child := entityIdInput.Children[0]
+			valReload = func() {
+				dui.setEntityIdInputValue(child, engine.EntityId(g.FieldString(i)))
 			}
 		} else if g.Fields[i].IsInput() {
 			textInput.UI.Show()
@@ -586,6 +629,137 @@ func (dui *WorkspaceDetailsUI) clickSelectContentId(e *document.Element) {
 		}, w.ed.FocusInterface)
 }
 
+func (dui *WorkspaceDetailsUI) clickSelectEntityId(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.selectEntityId").End()
+	w := dui.workspace.Value()
+	w.ed.BlurInterface()
+	options := []context_menu.ContextMenuOption{{
+		Label: "None",
+		Call: func() {
+			dui.setEntityIdInputValue(e, "")
+			dui.commonChangeData(e, false)
+		},
+	}}
+	for _, entity := range w.stageView.Manager().Entities() {
+		if entity == nil || entity.IsDeleted() {
+			continue
+		}
+		id := engine.EntityId(entity.StageData.Description.Id)
+		label := fmt.Sprintf("%s%s", strings.Repeat("  ", entity.Depth()), entityIdDisplayName(entity.Name(), id))
+		options = append(options, context_menu.ContextMenuOption{
+			Label: label,
+			Call: func() {
+				dui.setEntityIdInputValue(e, id)
+				dui.commonChangeData(e, false)
+			},
+		})
+	}
+	context_menu.Show(w.Host, options, w.Host.Window.Cursor.ScreenPosition(), w.ed.FocusInterface)
+}
+
+func (dui *WorkspaceDetailsUI) clearEntityId(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.clearEntityId").End()
+	target := entityIdInputElement(e)
+	if target == nil {
+		return
+	}
+	dui.setEntityIdInputValue(target, "")
+	dui.commonChangeData(target, false)
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDrop(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDrop").End()
+	w := dui.workspace.Value()
+	w.Doc.SetElementClasses(e, "dataEntityId")
+	id, ok := dui.firstDraggedEntityId()
+	if !ok {
+		return
+	}
+	dui.setEntityIdInputValue(e, id)
+	dui.commonChangeData(e, false)
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDragEnter(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDragEnter").End()
+	if _, ok := dui.firstDraggedEntityId(); !ok {
+		return
+	}
+	dui.workspace.Value().Doc.SetElementClasses(e, "dataEntityId", "dragHover")
+}
+
+func (dui *WorkspaceDetailsUI) entityIdDragExit(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.entityIdDragExit").End()
+	w := dui.workspace.Value()
+	if id := engine.EntityId(e.Attribute("data-entityid")); id != "" {
+		if entity, ok := w.stageView.Manager().EntityById(string(id)); !ok || entity.IsDeleted() {
+			w.Doc.SetElementClasses(e, "dataEntityId", "dataEntityIdInvalid")
+			return
+		}
+	}
+	w.Doc.SetElementClasses(e, "dataEntityId")
+}
+
+func (dui *WorkspaceDetailsUI) firstDraggedEntityId() (engine.EntityId, bool) {
+	dd, ok := windowing.DragData().(HierarchyEntityDragData)
+	if !ok {
+		return "", false
+	}
+	man := dui.workspace.Value().stageView.Manager()
+	for _, id := range dd.ids {
+		entity, ok := man.EntityById(id)
+		if ok && !entity.IsDeleted() {
+			return engine.EntityId(id), true
+		}
+	}
+	return "", false
+}
+
+func (dui *WorkspaceDetailsUI) setEntityIdInputValue(e *document.Element, id engine.EntityId) {
+	w := dui.workspace.Value()
+	e.SetAttribute("data-entityid", string(id))
+	label, valid := dui.entityIdLabel(id)
+	e.InnerLabel().SetText(label)
+	if valid {
+		w.Doc.SetElementClasses(e, "dataEntityId")
+	} else {
+		w.Doc.SetElementClasses(e, "dataEntityId", "dataEntityIdInvalid")
+	}
+}
+
+func (dui *WorkspaceDetailsUI) entityIdLabel(id engine.EntityId) (string, bool) {
+	if id == "" {
+		return "empty (Entity)", true
+	}
+	entity, ok := dui.workspace.Value().stageView.Manager().EntityById(string(id))
+	if !ok || entity.IsDeleted() {
+		return fmt.Sprintf("missing (%s)", id), false
+	}
+	return entityIdDisplayName(entity.Name(), id), true
+}
+
+func entityIdDisplayName(name string, id engine.EntityId) string {
+	return fmt.Sprintf("%s (%s)", name, id)
+}
+
+func entityIdInputElement(e *document.Element) *document.Element {
+	if e == nil {
+		return nil
+	}
+	if e.HasClass("dataEntityId") {
+		return e
+	}
+	parent := e.Parent.Value()
+	if parent == nil {
+		return nil
+	}
+	for _, child := range parent.Children {
+		if child.HasClass("dataEntityId") {
+			return child
+		}
+	}
+	return nil
+}
+
 func (dui *WorkspaceDetailsUI) contentIdDrop(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.contentIdDrop").End()
 	w := dui.workspace.Value()
@@ -626,6 +800,12 @@ func (dui *WorkspaceDetailsUI) contentIdDragExit(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.contentIdDragExit").End()
 	w := dui.workspace.Value()
 	w.Doc.SetElementClasses(e, "dataContentId")
+}
+
+func (dui *WorkspaceDetailsUI) reloadTargetedValues() {
+	for _, reload := range dui.TargetedElementValueReload {
+		reload()
+	}
 }
 
 func (dui *WorkspaceDetailsUI) commonChangeData(e *document.Element, isShaderData bool) bool {
@@ -703,6 +883,8 @@ func reflectAssignChanges(e *document.Element, v reflect.Value) bool {
 	case ui.ElementTypePanel:
 		if e.HasClass("dataContentId") {
 			inputText = e.InnerLabel().Text()
+		} else if e.HasClass("dataEntityId") {
+			inputText = e.Attribute("data-entityid")
 		}
 	}
 	switch v.Kind() {

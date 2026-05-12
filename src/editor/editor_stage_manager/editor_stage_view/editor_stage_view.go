@@ -240,10 +240,14 @@ func (v *StageView) setupCamera(ed EditorStageViewWorkspaceInterface) {
 func (v *StageView) DuplicateSelected(proj *project.Project) {
 	v.manager.DuplicateSelected(proj)
 	// The new selection is the duplicated entities
+	weakHost := weak.Make(v.host)
 	var callAttachments func(e *editor_stage_manager.StageEntity)
 	callAttachments = func(e *editor_stage_manager.StageEntity) {
 		for _, de := range e.DataBindings() {
-			data_binding_renderer.Attached(de, weak.Make(v.host), &v.manager, e)
+			data_binding_renderer.Attached(de, weakHost, &v.manager, e)
+			if v.manager.IsSelected(e) {
+				data_binding_renderer.ShowSpecific(de, weakHost, e)
+			}
 		}
 		for _, c := range e.Children {
 			callAttachments(editor_stage_manager.EntityToStageEntity(c))

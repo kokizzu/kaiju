@@ -42,7 +42,7 @@ import (
 
 	"kaijuengine.com/editor/project/project_database/content_database"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
 	"kaijuengine.com/registry/shader_data_registry"
@@ -108,7 +108,7 @@ func adjustMeshColorAndLocation(cam cameras.Camera, km *kaiju_mesh.KaijuMesh) {
 	for i := range km.Verts {
 		points[i].AddAssign(offset)
 	}
-	box := collision.AABBFromPoints(points)
+	box := graviton.AABBFromPoints(points)
 	offset = cam.Position()
 	offset.AddAssign(cam.Forward().Scale(box.Size().Length() * 1.35))
 	for i := range km.Verts {

@@ -45,7 +45,7 @@ import (
 
 	"kaijuengine.com/debug"
 	"kaijuengine.com/engine"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/concurrent"
 	"kaijuengine.com/platform/profiler/tracing"
@@ -81,7 +81,7 @@ type KaijuMesh struct {
 	Name       string
 	Verts      []rendering.Vertex
 	Indexes    []uint32
-	BVH        *collision.TriangleBVH
+	BVH        *graviton.TriangleBVH
 	Animations []KaijuMeshAnimation
 	Joints     []KaijuMeshJoint
 }
@@ -153,12 +153,12 @@ func (k *KaijuMesh) EnsureBVH() {
 	}
 }
 
-func (k *KaijuMesh) GenerateBVHArchive() *collision.TriangleBVH {
+func (k *KaijuMesh) GenerateBVHArchive() *graviton.TriangleBVH {
 	defer tracing.NewRegion("KaijuMesh.GenerateBVHArchive").End()
-	return collision.NewTriangleBVH(k.generateBVH(nil, nil, nil))
+	return graviton.NewTriangleBVH(k.generateBVH(nil, nil, nil))
 }
 
-func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *graviton.BVH {
 	defer tracing.NewRegion("KaijuMesh.GenerateBVH").End()
 	if k.BVH == nil {
 		k.BVH = k.GenerateBVHArchive()
@@ -171,15 +171,15 @@ func (k *KaijuMesh) GenerateBVH(threads *concurrent.Threads, transform *matrix.T
 	return bvh
 }
 
-func (k KaijuMesh) generateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *collision.BVH {
+func (k KaijuMesh) generateBVH(threads *concurrent.Threads, transform *matrix.Transform, data any) *graviton.BVH {
 	defer tracing.NewRegion("KaijuMesh.generateBVH").End()
 	tris := k.bvhTriangles(threads)
-	return collision.NewBVH(tris, transform, data)
+	return graviton.NewBVH(tris, transform, data)
 }
 
-func (k KaijuMesh) bvhTriangles(threads *concurrent.Threads) []collision.HitObject {
+func (k KaijuMesh) bvhTriangles(threads *concurrent.Threads) []graviton.HitObject {
 	defer tracing.NewRegion("KaijuMesh.bvhTriangles").End()
-	tris := make([]collision.HitObject, len(k.Indexes)/3)
+	tris := make([]graviton.HitObject, len(k.Indexes)/3)
 	if len(tris) == 0 {
 		return tris
 	}
@@ -191,7 +191,7 @@ func (k KaijuMesh) bvhTriangles(threads *concurrent.Threads) []collision.HitObje
 				k.Verts[k.Indexes[i+1]].Position,
 				k.Verts[k.Indexes[i+2]].Position,
 			}
-			tris[tri] = collision.DetailedTriangleFromPoints(points)
+			tris[tri] = graviton.DetailedTriangleFromPoints(points)
 		}
 	}
 	if threads == nil || threads.ThreadCount() == 0 || len(tris) == 1 {

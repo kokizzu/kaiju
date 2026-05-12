@@ -152,6 +152,11 @@ func rigidBodyLoadWireframe(host *engine.Host, g rigidBodyGizmo, transform *matr
 	sd := shader_data_registry.Create(material.Shader.ShaderDataName())
 	gsd := sd.(*shader_data_registry.ShaderDataEdTransformWire)
 	gsd.Color = matrix.NewColor(0, 1, 0, 1)
+	if g.Shape == engine_entity_data_physics.ShapeBox {
+		model := matrix.Mat4Identity()
+		model.Scale(g.Extent.Scale(2))
+		gsd.SetModel(model)
+	}
 	host.Drawings.AddDrawing(rendering.Drawing{
 		Material:   material,
 		Mesh:       wireframe,

@@ -163,7 +163,7 @@ func (s srcLine) string() string {
 }
 
 func (s *ShaderSource) readPreprocessor() {
-	re := regexp.MustCompile(`\s*#define\s+(\w+)(?:\s+([\w\d\s\+\-\*\/]+))?`)
+	re := regexp.MustCompile(`\s*#define\s+(\w+)(?:\s+([\w\d\s\+\-\*\/\.]+))?`)
 	cRe := regexp.MustCompile(`#(if[n]*def)\s+(\w+)`)
 	c2Re := regexp.MustCompile(`#(e{0,1}l{0,1}if)\s+(!{0,1})defined\((\w+)\)`)
 	ops := []string{"+", "-", "*", "/"}
@@ -245,9 +245,9 @@ func (s *ShaderSource) readPreprocessor() {
 			s.multilineDefine = line.hasDefineSlash()
 			match := re.FindStringSubmatch(line.string())
 			if len(match) == 3 {
-				name := match[1]
-				value := match[2]
-				isEquation := false
+			name := match[1]
+			value := strings.TrimSpace(match[2])
+			isEquation := false
 				if value != "" {
 					for j := range ops {
 						isEquation = isEquation || strings.Contains(value, ops[j])

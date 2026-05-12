@@ -37,7 +37,7 @@
 package cameras
 
 import (
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
 )
@@ -203,7 +203,7 @@ func (c *TurntableCamera) SetYawPitchZoom(yaw, pitch, zoom float32) {
 
 // RayCast will project a ray from the camera's position given a screen position
 // using the camera's view and projection matrices.
-func (c *TurntableCamera) RayCast(cursorPosition matrix.Vec2) collision.Ray {
+func (c *TurntableCamera) RayCast(cursorPosition matrix.Vec2) graviton.Ray {
 	defer tracing.NewRegion("TurntableCamera.RayCast").End()
 	return c.internalRayCast(cursorPosition, c.iView.ExtractPosition())
 }

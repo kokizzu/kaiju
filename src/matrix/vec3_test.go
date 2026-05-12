@@ -464,8 +464,8 @@ func TestVec3Negative(t *testing.T) {
 
 func TestVec3Inverse(t *testing.T) {
 	v := vec3ForTest()
-	v.Inverse()
-	if v.X() != -1 || v.Y() != -2 || v.Z() != -3 {
+	v = v.Inverse()
+	if v.X() != 1 || v.Y() != float32(1)/2 || v.Z() != float32(1)/3 {
 		t.Errorf("Expected {-1, -2, -3}, got (%f, %f, %f)", v.X(), v.Y(), v.Z())
 	}
 }

@@ -40,7 +40,7 @@ import (
 	"math"
 	"slices"
 
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/profiler/tracing"
 )
@@ -50,7 +50,7 @@ type StandardCamera struct {
 	iView            matrix.Mat4
 	projection       matrix.Mat4
 	iProjection      matrix.Mat4
-	frustum          collision.Frustum
+	frustum          graviton.Frustum
 	position         matrix.Vec3
 	lookAt           matrix.Vec3
 	up               matrix.Vec3
@@ -96,9 +96,9 @@ func NewStandardCameraOrthographic(width, height, viewWidth, viewHeight float32,
 
 // Frustum will return the camera's view frustum which is updated any time the
 // view or project of the camera changes.
-func (c *StandardCamera) Frustum() collision.Frustum { return c.frustum }
-func (c *StandardCamera) IsDirty() bool              { return c.frameDirty }
-func (c *StandardCamera) NewFrame()                  { c.frameDirty = false }
+func (c *StandardCamera) Frustum() graviton.Frustum { return c.frustum }
+func (c *StandardCamera) IsDirty() bool             { return c.frameDirty }
+func (c *StandardCamera) NewFrame()                 { c.frameDirty = false }
 
 func (c *StandardCamera) LightFrustumCSMProjections() []matrix.Mat4 {
 	defer tracing.NewRegion("StandardCamera.LightFrustums").End()
@@ -245,7 +245,7 @@ func (c *StandardCamera) SetPositionAndLookAt(position, lookAt matrix.Vec3) {
 
 // RayCast will project a ray from the camera's position given a screen position
 // using the camera's view and projection matrices.
-func (c *StandardCamera) RayCast(cursorPosition matrix.Vec2) collision.Ray {
+func (c *StandardCamera) RayCast(cursorPosition matrix.Vec2) graviton.Ray {
 	defer tracing.NewRegion("StandardCamera.RayCast").End()
 	return c.internalRayCast(cursorPosition, c.position)
 }
@@ -407,7 +407,7 @@ func (c *StandardCamera) updateFrustum() {
 	c.frustum.ExtractPlanes(vp)
 }
 
-func (c *StandardCamera) internalRayCast(cursorPosition matrix.Vec2, pos matrix.Vec3) collision.Ray {
+func (c *StandardCamera) internalRayCast(cursorPosition matrix.Vec2, pos matrix.Vec3) graviton.Ray {
 	defer tracing.NewRegion("StandardCamera.internalRayCast").End()
 	x := (2.0*cursorPosition.X())/c.viewWidth - 1.0
 	y := 1.0 - (2.0*cursorPosition.Y())/c.viewHeight
@@ -432,7 +432,7 @@ func (c *StandardCamera) internalRayCast(cursorPosition matrix.Vec2, pos matrix.
 		origin = c.position.Add(right.Scale(worldX)).Add(up.Scale(worldY))
 		direction = forward
 	}
-	return collision.Ray{Origin: origin, Direction: direction}
+	return graviton.Ray{Origin: origin, Direction: direction}
 }
 
 func (c *StandardCamera) callUpdateView() {

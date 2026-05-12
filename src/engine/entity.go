@@ -39,6 +39,7 @@ package engine
 import (
 	"log/slog"
 	"slices"
+	"weak"
 
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/klib"
@@ -63,6 +64,7 @@ type EntityId string
 // children unordered unless you have a specific reason to order them.
 type Entity struct {
 	id                    EntityId
+	idHost                weak.Pointer[Host]
 	Transform             matrix.Transform
 	Parent                *Entity
 	Children              []*Entity
@@ -266,6 +268,10 @@ func (e *Entity) FindByName(name string) *Entity {
 // be called in very specific scenarios and not directly in game code. Unless
 // there is a good reason (like this entity no longer bein gin the host).
 func (e *Entity) ForceCleanup() {
+	host := e.idHost.Value()
+	if host != nil {
+		host.unregisterEntityId(e)
+	}
 	e.OnDestroy.Execute()
 	*e = Entity{}
 }
@@ -418,6 +424,7 @@ func (e *Entity) destroy(host *Host) {
 func (e *Entity) innerDestroy(host *Host) {
 	if !e.isDestroyed {
 		e.isDestroyed = true
+		host.unregisterEntityId(e)
 		for i := range e.Children {
 			host.destroyedEntities = append(host.destroyedEntities, e.Children[i])
 			e.Children[i].innerDestroy(host)

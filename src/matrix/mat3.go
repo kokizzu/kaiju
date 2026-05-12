@@ -78,6 +78,14 @@ func NewMat3() Mat3 {
 	return Mat3Identity()
 }
 
+func (m Mat3) RowVector(row int) Vec3 {
+	return Vec3{m[row*3+0], m[row*3+1], m[row*3+2]}
+}
+
+func (m Mat3) ColumnVector(col int) Vec3 {
+	return Vec3{m[col+0], m[col+3], m[col+6]}
+}
+
 func Mat3FromSlice(a []Float) Mat3 {
 	return Mat3{
 		a[0], a[1], a[2],
@@ -137,14 +145,6 @@ func (m Mat3) ToMat4() Mat4 {
 
 func (m Mat3) At(rowIndex, colIndex int) Float {
 	return m[rowIndex*3+colIndex]
-}
-
-func (m Mat3) RowVector(row int) Vec3 {
-	return Vec3{m[row*3+0], m[row*3+1], m[row*3+2]}
-}
-
-func (m Mat3) ColumnVector(col int) Vec3 {
-	return Vec3{m[col+0], m[col+3], m[col+6]}
 }
 
 func (m Mat3) Transpose() Mat3 {

@@ -40,7 +40,7 @@ import (
 	"kaijuengine.com/editor/editor_controls"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/cameras"
-	"kaijuengine.com/engine/collision"
+	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/engine/systems/events"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/platform/hid"
@@ -67,7 +67,7 @@ type ScalingToolBox struct {
 	boxShaderData   rendering.DrawInstance
 	shaftTransform  matrix.Transform
 	boxTransform    matrix.Transform
-	hitBox          collision.AABB
+	hitBox          graviton.AABB
 }
 
 func (t *ScalingTool) Initialize(host *engine.Host) {
@@ -182,7 +182,7 @@ func (t *ScalingTool) updateHitBoxes() {
 	arrowLen := translationGizmoTotalHeight * scale * 0.5
 	r := matrix.Float(translationGizmoTotalRadius) * scale
 	for i := range t.boxes {
-		t.boxes[i].hitBox = collision.AABB{
+		t.boxes[i].hitBox = graviton.AABB{
 			Center: t.root.Position(),
 			Extent: matrix.NewVec3(r, r, r),
 		}

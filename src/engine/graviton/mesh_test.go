@@ -44,7 +44,6 @@ import (
 
 func TestMeshCollisionBuildsTrianglesBVHAndBounds(t *testing.T) {
 	mesh := testTriangleMesh()
-
 	if len(mesh.Triangles) != 1 {
 		t.Fatalf("expected 1 triangle, got %d", len(mesh.Triangles))
 	}
@@ -62,11 +61,9 @@ func TestMeshCollisionBuildsTrianglesBVHAndBounds(t *testing.T) {
 func TestStaticMeshBodyGeneratesBroadPhaseAABB(t *testing.T) {
 	system := System{}
 	system.Initialize()
-
 	body := system.NewBody()
 	body.Transform.SetPosition(matrix.Vec3{3, 0, 0})
 	body.SetStaticMesh(testTriangleMesh())
-
 	system.broadPhase.Rebuild(&system.bodies)
 	if len(system.broadPhase.proxies) != 1 {
 		t.Fatalf("expected 1 broad phase proxy, got %d", len(system.broadPhase.proxies))
@@ -84,11 +81,9 @@ func TestStaticMeshBodyGeneratesBroadPhaseAABB(t *testing.T) {
 func TestSystemRaycastHitsStaticMesh(t *testing.T) {
 	system := System{}
 	system.Initialize()
-
 	body := system.NewBody()
 	body.Transform.SetPosition(matrix.Vec3{3, 0, 0})
 	body.SetStaticMesh(testTriangleMesh())
-
 	hit, ok := system.Raycast(matrix.Vec3{3, 0, 1}, matrix.Vec3{3, 0, -1})
 	if !ok {
 		t.Fatal("expected raycast to hit mesh")

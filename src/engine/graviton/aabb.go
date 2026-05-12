@@ -194,19 +194,16 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	tri.Points[2].SubtractAssign(box.Center)
 	tri.Centroid.SubtractAssign(box.Center)
 	t := tri.Points
-
 	// Quick radius check to exit early
 	bRad := max(box.Extent.X(), box.Extent.Y(), box.Extent.Z())
 	cLen := tri.Centroid.Length()
 	if cLen > (bRad + tri.Radius) {
 		return false
 	}
-
 	// Compute edge vectors for triangle
 	e0 := t[1].Subtract(t[0])
 	e1 := t[2].Subtract(t[1])
 	e2 := t[0].Subtract(t[2])
-
 	a00 := matrix.Vec3Cross(matrix.Vec3Right(), e0)
 	a01 := matrix.Vec3Cross(matrix.Vec3Right(), e1)
 	a02 := matrix.Vec3Cross(matrix.Vec3Right(), e2)
@@ -216,7 +213,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	a20 := matrix.Vec3Cross(matrix.Vec3Forward(), e0)
 	a21 := matrix.Vec3Cross(matrix.Vec3Forward(), e1)
 	a22 := matrix.Vec3Cross(matrix.Vec3Forward(), e2)
-
 	// p0 == p1 due to AABB
 	p0 = matrix.Vec3Dot(t[0], a00)
 	p1 = matrix.Vec3Dot(t[1], a00)
@@ -229,7 +225,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	// TODO:  p0 = p1 so we can remove one of them, this holds true with different
 	// combinations of p0, p1, and p2 in the remaining similar blocks
 	p0 = matrix.Vec3Dot(t[0], a01)
@@ -241,7 +236,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a02)
 	p1 = matrix.Vec3Dot(t[1], a02)
 	p2 = matrix.Vec3Dot(t[2], a02)
@@ -251,7 +245,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a10)
 	p1 = matrix.Vec3Dot(t[1], a10)
 	p2 = matrix.Vec3Dot(t[2], a10)
@@ -261,7 +254,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a11)
 	p1 = matrix.Vec3Dot(t[1], a11)
 	p2 = matrix.Vec3Dot(t[2], a11)
@@ -271,7 +263,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a12)
 	p1 = matrix.Vec3Dot(t[1], a12)
 	p2 = matrix.Vec3Dot(t[2], a12)
@@ -281,7 +272,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a20)
 	p1 = matrix.Vec3Dot(t[1], a20)
 	p2 = matrix.Vec3Dot(t[2], a20)
@@ -291,7 +281,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a21)
 	p1 = matrix.Vec3Dot(t[1], a21)
 	p2 = matrix.Vec3Dot(t[2], a21)
@@ -301,7 +290,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	p0 = matrix.Vec3Dot(t[0], a22)
 	p1 = matrix.Vec3Dot(t[1], a22)
 	p2 = matrix.Vec3Dot(t[2], a22)
@@ -311,7 +299,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 	if max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r {
 		return false
 	}
-
 	if max(t[0].X(), max(t[1].X(), t[2].X())) < -box.Extent.X() ||
 		min(t[0].X(), min(t[1].X(), t[2].X())) > box.Extent.X() {
 		return false
@@ -322,7 +309,6 @@ func (box *AABB) TriangleIntersect(tri DetailedTriangle) bool {
 		min(t[0].Z(), min(t[1].Z(), t[2].Z())) > box.Extent.Z() {
 		return false
 	}
-
 	p := Plane{
 		Normal: matrix.Vec3Cross(e0, e1),
 	}
@@ -405,9 +391,7 @@ func (a AABB) Transform(m matrix.Mat4) AABB {
 	return AABBFromCorners(corners)
 }
 
-// //////////////////////////////////////////////////////////////////////////////
 // Satisfying BVH HitObject interface
-// //////////////////////////////////////////////////////////////////////////////
 func (box AABB) Bounds() AABB { return box }
 
 func (box AABB) RayIntersectTest(ray Ray, length float32, transform *matrix.Transform) (matrix.Vec3, bool) {

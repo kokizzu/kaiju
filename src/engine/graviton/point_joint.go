@@ -47,22 +47,19 @@ var pointJointAxes = [3]matrix.Vec3{
 // PointJoint keeps two local anchors coincident while leaving relative
 // orientation unconstrained. Nil bodies are treated as fixed world anchors.
 type PointJoint struct {
-	BodyA        *RigidBody
-	BodyB        *RigidBody
-	LocalAnchorA matrix.Vec3
-	LocalAnchorB matrix.Vec3
-
+	BodyA                    *RigidBody
+	BodyB                    *RigidBody
+	LocalAnchorA             matrix.Vec3
+	LocalAnchorB             matrix.Vec3
 	Stiffness                matrix.Float
 	BiasFactor               matrix.Float
 	PositionCorrectionFactor matrix.Float
 	Slop                     matrix.Float
 	MaxCorrection            matrix.Float
 	WarmStarting             bool
-
-	AccumulatedImpulse matrix.Vec3
-
-	constraint *Constraint
-	rows       [3]ConstraintSolverRow
+	AccumulatedImpulse       matrix.Vec3
+	constraint               *Constraint
+	rows                     [3]ConstraintSolverRow
 }
 
 func NewPointJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB matrix.Vec3) *PointJoint {

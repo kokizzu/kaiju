@@ -65,16 +65,15 @@ type collisionIsland struct {
 // solver. Contacts are grouped into independent dynamic islands so islands can
 // be solved in parallel without concurrent writes to the same body.
 type CollisionSolver struct {
-	VelocityIterations int
-	PositionIterations int
-	DeltaTime          matrix.Float
-	Restitution        matrix.Float
-	StaticFriction     matrix.Float
-	DynamicFriction    matrix.Float
-	Baumgarte          matrix.Float
-	PenetrationSlop    matrix.Float
-	MaxCorrection      matrix.Float
-
+	VelocityIterations  int
+	PositionIterations  int
+	DeltaTime           matrix.Float
+	Restitution         matrix.Float
+	StaticFriction      matrix.Float
+	DynamicFriction     matrix.Float
+	Baumgarte           matrix.Float
+	PenetrationSlop     matrix.Float
+	MaxCorrection       matrix.Float
 	islands             []collisionIsland
 	writableBodies      []*RigidBody
 	parents             []int
@@ -166,7 +165,6 @@ func (s *CollisionSolver) buildIslands(manifolds []ContactManifold, constraints 
 	s.ranks = s.ranks[:0]
 	s.eligibleContacts = s.eligibleContacts[:0]
 	s.eligibleConstraints = s.eligibleConstraints[:0]
-
 	for i := range manifolds {
 		manifold := &manifolds[i]
 		if !s.shouldResolve(manifold) {
@@ -190,7 +188,6 @@ func (s *CollisionSolver) buildIslands(manifolds []ContactManifold, constraints 
 		}
 		s.eligibleConstraints = append(s.eligibleConstraints, i)
 	}
-
 	for _, manifoldIndex := range s.eligibleContacts {
 		manifold := &manifolds[manifoldIndex]
 		root := s.manifoldRoot(manifold)

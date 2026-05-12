@@ -47,7 +47,6 @@ func TestCollisionSolverSeparatesDynamicFromStatic(t *testing.T) {
 	system := System{}
 	system.Initialize()
 	system.SetGravity(matrix.Vec3Zero())
-
 	dynamic := system.NewBody()
 	dynamic.Active = true
 	dynamic.Simulation.Type = RigidBodyTypeDynamic
@@ -55,23 +54,19 @@ func TestCollisionSolverSeparatesDynamicFromStatic(t *testing.T) {
 	dynamic.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	dynamic.Collision.Mask = 1
 	dynamic.MotionState.LinearVelocity = matrix.Vec3Right()
-
 	static := system.NewBody()
 	static.Active = true
 	static.Simulation.Type = RigidBodyTypeStatic
 	static.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	static.Collision.Mask = 1
 	static.Transform.SetPosition(matrix.Vec3{1.5, 0, 0})
-
 	workGroup := concurrent.WorkGroup{}
 	workGroup.Init()
 	threads := concurrent.Threads{}
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	system.Step(&workGroup, &threads, 0)
-
 	if dynamic.Transform.WorldPosition().X() >= 0 {
 		t.Fatalf("expected dynamic body to be pushed away from static body, got %v",
 			dynamic.Transform.WorldPosition())
@@ -92,7 +87,6 @@ func TestCollisionSolverSplitsDynamicPairCorrection(t *testing.T) {
 	b.MotionState.LinearVelocity = matrix.Vec3Left()
 	a.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	b.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
-
 	manifold, ok := CollideBodies(a, b)
 	if !ok {
 		t.Fatal("expected collision")
@@ -106,7 +100,6 @@ func TestCollisionSolverSplitsDynamicPairCorrection(t *testing.T) {
 	solver.PenetrationSlop = 0
 	solver.MaxCorrection = 10
 	solver.Solve([]ContactManifold{manifold}, nil)
-
 	if matrix.Abs(a.Transform.WorldPosition().X()+0.25) > 0.0001 {
 		t.Fatalf("expected body A to move half the penetration, got %v", a.Transform.WorldPosition())
 	}
@@ -126,14 +119,12 @@ func TestCollisionSolverIgnoresTriggers(t *testing.T) {
 	a.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	b.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	a.Collision.IsTrigger = true
-
 	manifold, ok := CollideBodies(a, b)
 	if !ok {
 		t.Fatal("expected trigger contact to be reported")
 	}
 	solver := CollisionSolver{}
 	solver.Solve([]ContactManifold{manifold}, nil)
-
 	if !matrix.Vec3ApproxTo(a.Transform.WorldPosition(), matrix.Vec3Zero(), 0.0001) {
 		t.Fatalf("expected trigger body not to be moved, got %v", a.Transform.WorldPosition())
 	}
@@ -147,7 +138,6 @@ func TestCollisionSolverParallelIndependentIslands(t *testing.T) {
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	manifolds := make([]ContactManifold, 0, 32)
 	bodies := make([]*RigidBody, 0, 64)
 	for i := range 32 {
@@ -163,7 +153,6 @@ func TestCollisionSolverParallelIndependentIslands(t *testing.T) {
 		manifolds = append(manifolds, manifold)
 		bodies = append(bodies, a, b)
 	}
-
 	solver := CollisionSolver{}
 	solver.Initialize()
 	solver.VelocityIterations = 1
@@ -172,7 +161,6 @@ func TestCollisionSolverParallelIndependentIslands(t *testing.T) {
 	solver.PenetrationSlop = 0
 	solver.MaxCorrection = 10
 	solver.Solve(manifolds, &threads)
-
 	for i := 0; i < len(bodies); i += 2 {
 		a := bodies[i]
 		b := bodies[i+1]

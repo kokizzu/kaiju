@@ -48,7 +48,6 @@ func TestNarrowPhaseSphereSphereContact(t *testing.T) {
 	a.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	b := testRigidBody(Shape{}, matrix.Vec3{1.5, 0, 0})
 	b.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
-
 	manifold, ok := CollideBodies(a, b)
 	if !ok {
 		t.Fatal("expected overlapping spheres to collide")
@@ -70,7 +69,6 @@ func TestNarrowPhaseSphereAABBContact(t *testing.T) {
 	sphereBody.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	boxBody := testRigidBody(Shape{}, matrix.Vec3{1.75, 0, 0})
 	boxBody.Collision.Shape.SetAABB(matrix.Vec3Zero(), matrix.Vec3{1, 1, 1})
-
 	manifold, ok := CollideBodies(sphereBody, boxBody)
 	if !ok {
 		t.Fatal("expected sphere and AABB to collide")
@@ -89,7 +87,6 @@ func TestNarrowPhaseCapsuleCapsuleContact(t *testing.T) {
 	a.Collision.Shape.SetCapsule(matrix.Vec3Zero(), 0.5, 2, matrix.Vec3Up())
 	b := testRigidBody(Shape{}, matrix.Vec3{0.75, 0, 0})
 	b.Collision.Shape.SetCapsule(matrix.Vec3Zero(), 0.5, 2, matrix.Vec3Up())
-
 	manifold, ok := CollideBodies(a, b)
 	if !ok {
 		t.Fatal("expected overlapping capsules to collide")
@@ -106,7 +103,6 @@ func TestNarrowPhaseCapsuleCapsuleContact(t *testing.T) {
 func TestNarrowPhaseCylinderSphereContact(t *testing.T) {
 	cylinder := testRigidBody(NewCylinderShape(1, 2), matrix.Vec3Zero())
 	sphere := testRigidBody(NewSphereShape(1), matrix.Vec3{1.75, 0, 0})
-
 	manifold, ok := CollideBodies(cylinder, sphere)
 	if !ok {
 		t.Fatal("expected cylinder and sphere to collide")
@@ -123,7 +119,6 @@ func TestNarrowPhaseCylinderSphereContact(t *testing.T) {
 func TestNarrowPhaseCylinderBoxContact(t *testing.T) {
 	cylinder := testRigidBody(NewCylinderShape(1, 2), matrix.Vec3Zero())
 	box := testRigidBody(NewBoxShape(matrix.Vec3One()), matrix.Vec3{1.75, 0, 0})
-
 	manifold, ok := CollideBodies(cylinder, box)
 	if !ok {
 		t.Fatal("expected cylinder and box to collide")
@@ -142,7 +137,6 @@ func TestNarrowPhaseConeSphereContact(t *testing.T) {
 	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0.8, 0, 0})
 	expectedNormal := matrix.NewVec3(0.8944272, -0.4472136, 0)
 	expectedPenetration := matrix.Float(0.2316718)
-
 	manifold, ok := CollideBodies(cone, sphere)
 	if !ok {
 		t.Fatal("expected cone and sphere to collide")
@@ -159,7 +153,6 @@ func TestNarrowPhaseConeSphereContact(t *testing.T) {
 func TestNarrowPhaseConeBoxContact(t *testing.T) {
 	cone := testRigidBody(NewConeShape(1, 2), matrix.Vec3Zero())
 	box := testRigidBody(NewBoxShape(matrix.Vec3One()), matrix.Vec3{0, 1.75, 0})
-
 	manifold, ok := CollideBodies(cone, box)
 	if !ok {
 		t.Fatal("expected cone and box to collide")
@@ -176,7 +169,6 @@ func TestNarrowPhaseConeBoxContact(t *testing.T) {
 func TestNarrowPhaseSphereStaticMeshFloorContact(t *testing.T) {
 	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.45, 0})
 	mesh := testStaticMeshBody(testMeshFloor())
-
 	manifold, ok := CollideBodies(sphere, mesh)
 	if !ok {
 		t.Fatal("expected sphere to collide with mesh floor")
@@ -193,7 +185,6 @@ func TestNarrowPhaseSphereStaticMeshFloorContact(t *testing.T) {
 func TestNarrowPhaseCapsuleStaticMeshFloorContact(t *testing.T) {
 	capsule := testRigidBody(NewCapsuleShape(0.5, 2), matrix.Vec3{0, 1.45, 0})
 	mesh := testStaticMeshBody(testMeshFloor())
-
 	manifold, ok := CollideBodies(capsule, mesh)
 	if !ok {
 		t.Fatal("expected capsule to collide with mesh floor")
@@ -210,7 +201,6 @@ func TestNarrowPhaseCapsuleStaticMeshFloorContact(t *testing.T) {
 func TestNarrowPhaseOOBBStaticMeshFloorContact(t *testing.T) {
 	box := testRigidBody(NewBoxShape(matrix.NewVec3(0.5, 0.5, 0.5)), matrix.Vec3{0, 0.45, 0})
 	mesh := testStaticMeshBody(testMeshFloor())
-
 	manifold, ok := CollideBodies(box, mesh)
 	if !ok {
 		t.Fatal("expected box to collide with mesh floor")
@@ -227,7 +217,6 @@ func TestNarrowPhaseOOBBStaticMeshFloorContact(t *testing.T) {
 func TestNarrowPhaseSphereStaticMeshSlopeContact(t *testing.T) {
 	sphere := testRigidBody(NewSphereShape(0.5), matrix.Vec3{0, 0.45, 0})
 	mesh := testStaticMeshBody(testSlopedMeshFloor())
-
 	manifold, ok := CollideBodies(sphere, mesh)
 	if !ok {
 		t.Fatal("expected sphere to collide with sloped mesh floor")
@@ -246,7 +235,6 @@ func TestNarrowPhaseSphereStaticMeshEdgeContact(t *testing.T) {
 		{1, 0, 0},
 		{0, 0, 1},
 	}, []uint32{0, 1, 2}))
-
 	manifold, ok := CollideBodies(sphere, mesh)
 	if !ok {
 		t.Fatal("expected sphere to collide with triangle edge")
@@ -263,22 +251,18 @@ func TestNarrowPhaseSphereStaticMeshEdgeContact(t *testing.T) {
 func TestSystemDynamicSphereRestsOnStaticMeshFloor(t *testing.T) {
 	system := System{}
 	system.Initialize()
-
 	sphere := system.NewBody()
 	sphere.SetDynamic(1, matrix.Vec3One())
 	sphere.Collision.Shape = NewSphereShape(0.5)
 	sphere.Transform.SetPosition(matrix.Vec3{0, 0.5, 0})
-
 	floor := system.NewBody()
 	floor.SetStaticMesh(testMeshFloor())
-
 	workGroup := concurrent.WorkGroup{}
 	workGroup.Init()
 	threads := concurrent.Threads{}
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	hadContact := false
 	for range 30 {
 		system.Step(&workGroup, &threads, 1.0/60.0)
@@ -311,18 +295,14 @@ func TestNarrowPhaseParallelMatchesSequential(t *testing.T) {
 			pairs = append(pairs, ActivePair{BodyA: bodies[i], BodyB: bodies[j]})
 		}
 	}
-
 	var sequential NarrowPhase
 	seq := manifoldSet(sequential.Collide(pairs, nil))
-
 	threads := concurrent.Threads{}
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	var parallel NarrowPhase
 	par := manifoldSet(parallel.Collide(pairs, &threads))
-
 	if len(seq) != len(par) {
 		t.Fatalf("expected %d parallel manifolds, got %d", len(seq), len(par))
 	}
@@ -337,7 +317,6 @@ func TestSystemStepPublishesContacts(t *testing.T) {
 	system := System{}
 	system.Initialize()
 	system.SetGravity(matrix.Vec3Zero())
-
 	dynamic := system.NewBody()
 	dynamic.Active = true
 	dynamic.Simulation.Type = RigidBodyTypeDynamic
@@ -345,7 +324,6 @@ func TestSystemStepPublishesContacts(t *testing.T) {
 	dynamic.Collision.Shape.SetSphere(matrix.Vec3Zero(), 1)
 	dynamic.Collision.Group = 0
 	dynamic.Collision.Mask = 1
-
 	static := system.NewBody()
 	static.Active = true
 	static.Simulation.Type = RigidBodyTypeStatic
@@ -353,16 +331,13 @@ func TestSystemStepPublishesContacts(t *testing.T) {
 	static.Collision.Group = 0
 	static.Collision.Mask = 1
 	static.Transform.SetPosition(matrix.Vec3{1.5, 0, 0})
-
 	workGroup := concurrent.WorkGroup{}
 	workGroup.Init()
 	threads := concurrent.Threads{}
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	system.Step(&workGroup, &threads, 0)
-
 	contacts := system.Contacts()
 	if len(contacts) != 1 {
 		t.Fatalf("expected 1 contact manifold, got %d", len(contacts))

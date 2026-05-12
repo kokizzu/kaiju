@@ -51,24 +51,21 @@ const (
 // DistanceJoint keeps two body anchors, or one body anchor and one fixed world
 // anchor, at a target distance. Nil bodies are treated as fixed world anchors.
 type DistanceJoint struct {
-	BodyA        *RigidBody
-	BodyB        *RigidBody
-	LocalAnchorA matrix.Vec3
-	LocalAnchorB matrix.Vec3
-	RestLength   matrix.Float
-
+	BodyA                    *RigidBody
+	BodyB                    *RigidBody
+	LocalAnchorA             matrix.Vec3
+	LocalAnchorB             matrix.Vec3
+	RestLength               matrix.Float
 	Stiffness                matrix.Float
 	BiasFactor               matrix.Float
 	PositionCorrectionFactor matrix.Float
 	Slop                     matrix.Float
 	MaxCorrection            matrix.Float
 	WarmStarting             bool
-
-	AccumulatedImpulse matrix.Float
-
-	constraint *Constraint
-	row        ConstraintSolverRow
-	lastAxis   matrix.Vec3
+	AccumulatedImpulse       matrix.Float
+	constraint               *Constraint
+	row                      ConstraintSolverRow
+	lastAxis                 matrix.Vec3
 }
 
 func NewDistanceJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB matrix.Vec3) *DistanceJoint {

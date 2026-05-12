@@ -45,7 +45,6 @@ import (
 func TestNewBoxShapeCreatesOOBB(t *testing.T) {
 	extent := matrix.NewVec3(1, 2, 3)
 	shape := NewBoxShape(extent)
-
 	if shape.Type != ShapeTypeOOBB {
 		t.Fatalf("expected box shape to use OOBB, got %v", shape.Type)
 	}
@@ -62,7 +61,6 @@ func TestNewBoxShapeCreatesOOBB(t *testing.T) {
 
 func TestNewSphereShapeSetup(t *testing.T) {
 	shape := NewSphereShape(2.5)
-
 	if shape.Type != ShapeTypeSphere {
 		t.Fatalf("expected sphere shape, got %v", shape.Type)
 	}
@@ -76,7 +74,6 @@ func TestNewSphereShapeSetup(t *testing.T) {
 
 func TestNewCapsuleShapeSetup(t *testing.T) {
 	shape := NewCapsuleShape(1.5, 4)
-
 	if shape.Type != ShapeTypeCapsule {
 		t.Fatalf("expected capsule shape, got %v", shape.Type)
 	}

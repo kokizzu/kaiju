@@ -50,7 +50,6 @@ func TestDistanceJointChainRemainsStable(t *testing.T) {
 	system.SetGravity(matrix.Vec3Zero())
 	system.ConstraintVelocityIterations = 12
 	system.ConstraintPositionIterations = 12
-
 	bodies := []*RigidBody{
 		addJointBody(&system, matrix.Vec3{-3, 0, 0}, RigidBodyTypeStatic),
 		addJointBody(&system, matrix.Vec3{-2, 0, 0}, RigidBodyTypeDynamic),
@@ -62,14 +61,11 @@ func TestDistanceJointChainRemainsStable(t *testing.T) {
 	}
 	bodies[2].MotionState.LinearVelocity = matrix.Vec3Up().Scale(2)
 	bodies[4].MotionState.LinearVelocity = matrix.Vec3Down().Scale(2)
-
 	joints := make([]*DistanceJoint, 0, len(bodies)-1)
 	for i := 0; i < len(bodies)-1; i++ {
 		joints = append(joints, system.NewDistanceJoint(bodies[i], bodies[i+1], matrix.Vec3Zero(), matrix.Vec3Zero()))
 	}
-
 	stepJointComposition(t, &system, 600)
-
 	assertFiniteBodies(t, bodies)
 	for i, joint := range joints {
 		if distance := joint.CurrentLength(); matrix.Abs(distance-1) > 0.06 {
@@ -87,7 +83,6 @@ func TestRopeChainDoesNotExceedSegmentLengths(t *testing.T) {
 	system.Initialize()
 	system.ConstraintVelocityIterations = 12
 	system.ConstraintPositionIterations = 12
-
 	bodies := []*RigidBody{
 		addJointBody(&system, matrix.Vec3{0, 0, 0}, RigidBodyTypeStatic),
 		addJointBody(&system, matrix.Vec3{0, -1, 0}, RigidBodyTypeDynamic),
@@ -96,16 +91,13 @@ func TestRopeChainDoesNotExceedSegmentLengths(t *testing.T) {
 		addJointBody(&system, matrix.Vec3{0, -4, 0}, RigidBodyTypeDynamic),
 	}
 	bodies[len(bodies)-1].MotionState.LinearVelocity = matrix.Vec3Right().Scale(3)
-
 	ropes := make([]*RopeJoint, 0, len(bodies)-1)
 	for i := 0; i < len(bodies)-1; i++ {
 		rope := system.NewRopeJoint(bodies[i], bodies[i+1], matrix.Vec3Zero(), matrix.Vec3Zero())
 		rope.SetMaxLength(1)
 		ropes = append(ropes, rope)
 	}
-
 	stepJointComposition(t, &system, 720)
-
 	assertFiniteBodies(t, bodies)
 	for i, rope := range ropes {
 		if distance := rope.CurrentLength(); distance > 1.08 {
@@ -123,7 +115,6 @@ func TestBridgeLinksStayConnectedUnderGravity(t *testing.T) {
 	system.Initialize()
 	system.ConstraintVelocityIterations = 14
 	system.ConstraintPositionIterations = 14
-
 	bodies := []*RigidBody{
 		addJointBody(&system, matrix.Vec3{-3, 0, 0}, RigidBodyTypeStatic),
 		addJointBody(&system, matrix.Vec3{-2, 0, 0}, RigidBodyTypeDynamic),
@@ -133,16 +124,13 @@ func TestBridgeLinksStayConnectedUnderGravity(t *testing.T) {
 		addJointBody(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic),
 		addJointBody(&system, matrix.Vec3{3, 0, 0}, RigidBodyTypeStatic),
 	}
-
 	joints := make([]*DistanceJoint, 0, len(bodies)-1)
 	for i := 0; i < len(bodies)-1; i++ {
 		joint := system.NewDistanceJoint(bodies[i], bodies[i+1], matrix.Vec3Zero(), matrix.Vec3Zero())
 		joint.SetRestLength(1)
 		joints = append(joints, joint)
 	}
-
 	stepJointComposition(t, &system, 900)
-
 	assertFiniteBodies(t, bodies)
 	for i, joint := range joints {
 		if distance := joint.CurrentLength(); distance > 1.12 {
@@ -160,7 +148,6 @@ func TestHingePendulumClockArmStaysAnchored(t *testing.T) {
 	system.Initialize()
 	system.ConstraintVelocityIterations = 12
 	system.ConstraintPositionIterations = 12
-
 	anchor := addJointBody(&system, matrix.Vec3Zero(), RigidBodyTypeStatic)
 	arm := addJointBody(&system, matrix.Vec3{0, -2, 0}, RigidBodyTypeDynamic)
 	arm.MotionState.LinearVelocity = matrix.Vec3Right().Scale(2)
@@ -172,9 +159,7 @@ func TestHingePendulumClockArmStaysAnchored(t *testing.T) {
 		matrix.Vec3Backward(),
 		matrix.Vec3Backward(),
 	)
-
 	stepJointComposition(t, &system, 720)
-
 	assertFiniteBodies(t, []*RigidBody{anchor, arm})
 	if distance := joint.WorldAnchorA().Distance(joint.WorldAnchorB()); distance > 0.06 {
 		t.Fatalf("expected pendulum hinge anchors to stay connected, got %f at %v and %v",

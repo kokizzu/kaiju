@@ -41,25 +41,22 @@ import "kaijuengine.com/matrix"
 // RopeJoint keeps two anchors from separating beyond MaxLength. Unlike a
 // DistanceJoint, it is inactive while the anchors are within the limit.
 type RopeJoint struct {
-	BodyA        *RigidBody
-	BodyB        *RigidBody
-	LocalAnchorA matrix.Vec3
-	LocalAnchorB matrix.Vec3
-	MaxLength    matrix.Float
-
+	BodyA                    *RigidBody
+	BodyB                    *RigidBody
+	LocalAnchorA             matrix.Vec3
+	LocalAnchorB             matrix.Vec3
+	MaxLength                matrix.Float
 	Stiffness                matrix.Float
 	BiasFactor               matrix.Float
 	PositionCorrectionFactor matrix.Float
 	Slop                     matrix.Float
 	MaxCorrection            matrix.Float
 	WarmStarting             bool
-
-	AccumulatedImpulse matrix.Float
-
-	constraint *Constraint
-	row        ConstraintSolverRow
-	lastAxis   matrix.Vec3
-	taut       bool
+	AccumulatedImpulse       matrix.Float
+	constraint               *Constraint
+	row                      ConstraintSolverRow
+	lastAxis                 matrix.Vec3
+	taut                     bool
 }
 
 func NewRopeJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB matrix.Vec3) *RopeJoint {

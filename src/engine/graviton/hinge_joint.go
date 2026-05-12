@@ -42,40 +42,37 @@ import "kaijuengine.com/matrix"
 // Relative rotation is constrained around the two axes perpendicular to the
 // hinge, leaving rotation around the hinge axis free.
 type HingeJoint struct {
-	BodyA        *RigidBody
-	BodyB        *RigidBody
-	LocalAnchorA matrix.Vec3
-	LocalAnchorB matrix.Vec3
-	LocalAxisA   matrix.Vec3
-	LocalAxisB   matrix.Vec3
-	LocalRefA    matrix.Vec3
-	LocalRefB    matrix.Vec3
-
-	Stiffness                matrix.Float
-	BiasFactor               matrix.Float
-	PositionCorrectionFactor matrix.Float
-	Slop                     matrix.Float
-	MaxCorrection            matrix.Float
-	WarmStarting             bool
-	EnableLimits             bool
-	MinAngle                 matrix.Float
-	MaxAngle                 matrix.Float
-	EnableMotor              bool
-	MotorTargetSpeed         matrix.Float
-	MaxMotorImpulse          matrix.Float
-	MaxMotorTorque           matrix.Float
-
+	BodyA                     *RigidBody
+	BodyB                     *RigidBody
+	LocalAnchorA              matrix.Vec3
+	LocalAnchorB              matrix.Vec3
+	LocalAxisA                matrix.Vec3
+	LocalAxisB                matrix.Vec3
+	LocalRefA                 matrix.Vec3
+	LocalRefB                 matrix.Vec3
+	Stiffness                 matrix.Float
+	BiasFactor                matrix.Float
+	PositionCorrectionFactor  matrix.Float
+	Slop                      matrix.Float
+	MaxCorrection             matrix.Float
+	WarmStarting              bool
+	EnableLimits              bool
+	MinAngle                  matrix.Float
+	MaxAngle                  matrix.Float
+	EnableMotor               bool
+	MotorTargetSpeed          matrix.Float
+	MaxMotorImpulse           matrix.Float
+	MaxMotorTorque            matrix.Float
 	AccumulatedAnchorImpulse  matrix.Vec3
 	AccumulatedAngularImpulse matrix.Vec2
 	AccumulatedLimitImpulse   matrix.Float
 	AccumulatedMotorImpulse   matrix.Float
-
-	constraint  *Constraint
-	anchorRows  [3]ConstraintSolverRow
-	angularRows [2]AngularConstraintSolverRow
-	limitRow    AngularConstraintSolverRow
-	motorRow    AngularConstraintSolverRow
-	limitState  int
+	constraint                *Constraint
+	anchorRows                [3]ConstraintSolverRow
+	angularRows               [2]AngularConstraintSolverRow
+	limitRow                  AngularConstraintSolverRow
+	motorRow                  AngularConstraintSolverRow
+	limitState                int
 }
 
 func NewHingeJoint(bodyA, bodyB *RigidBody, localAnchorA, localAnchorB, localAxisA, localAxisB matrix.Vec3) *HingeJoint {

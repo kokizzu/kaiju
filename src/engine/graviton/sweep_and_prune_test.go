@@ -49,12 +49,10 @@ func TestSweepPruneReturnsOverlappingBodyPair(t *testing.T) {
 	a := addSweepBody(&bodies, matrix.Vec3{0, 0, 0})
 	b := addSweepBody(&bodies, matrix.Vec3{1.5, 0, 0})
 	addSweepBody(&bodies, matrix.Vec3{4, 0, 0})
-
 	var sap SweepPrune
 	sap.Initialize(8)
 	sap.Rebuild(&bodies)
 	pairs := sap.Sweep()
-
 	if len(pairs) != 1 {
 		t.Fatalf("expected 1 potential pair, got %d", len(pairs))
 	}
@@ -77,12 +75,10 @@ func TestSweepPruneSupportsMultiplePools(t *testing.T) {
 			body.Transform.SetPosition(matrix.Vec3{0.5, 0, 0})
 		}
 	}
-
 	var sap SweepPrune
 	sap.Initialize(300)
 	sap.Rebuild(&bodies)
 	pairs := sap.Sweep()
-
 	if len(pairs) != 1 {
 		t.Fatalf("expected 1 potential pair across pool boundary, got %d", len(pairs))
 	}
@@ -103,22 +99,18 @@ func TestSweepPruneParallelMatchesSequential(t *testing.T) {
 			})
 		}
 	}
-
 	var sequential SweepPrune
 	sequential.Initialize(128)
 	sequential.Rebuild(&bodies)
 	seqPairs := pairSet(sequential.Sweep())
-
 	threads := concurrent.Threads{}
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	var parallel SweepPrune
 	parallel.Initialize(128)
 	parallel.RebuildParallel(&bodies, &threads)
 	parPairs := pairSet(parallel.SweepParallel(&threads, nil))
-
 	if len(seqPairs) != len(parPairs) {
 		t.Fatalf("expected %d parallel pairs, got %d", len(seqPairs), len(parPairs))
 	}

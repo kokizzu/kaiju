@@ -182,7 +182,6 @@ func (s Cylinder) IntersectsAABB(b AABB) bool {
 	if matrix.Vec3Dot(radial, radial) <= s.Radius*s.Radius {
 		return true
 	}
-
 	for i := range 8 {
 		c := corners[i]
 		diff := c.Subtract(bottom)

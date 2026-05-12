@@ -252,7 +252,6 @@ func collideSphereAny(a Sphere, b Shape) (Contact, bool) {
 	default:
 		return Contact{}, false
 	}
-	return approximateContact(Shape(a), b), true
 }
 
 func collideAABBAny(a AABB, b Shape) (Contact, bool) {
@@ -276,7 +275,6 @@ func collideAABBAny(a AABB, b Shape) (Contact, bool) {
 	default:
 		return Contact{}, false
 	}
-	return approximateContact(Shape(a), b), true
 }
 
 func collideOOBBAny(a OOBB, b Shape) (Contact, bool) {
@@ -301,7 +299,6 @@ func collideOOBBAny(a OOBB, b Shape) (Contact, bool) {
 	default:
 		return Contact{}, false
 	}
-	return approximateContact(Shape(a), b), true
 }
 
 func collideCapsuleAny(a Capsule, b Shape) (Contact, bool) {

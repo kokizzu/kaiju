@@ -410,7 +410,6 @@ func capsuleSpineVsCylinderAxis(s Capsule, c Cylinder) bool {
 	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
 	cylBottom := c.Center.Subtract(c.Direction.Scale(halfHC))
 	cylTop := c.Center.Add(c.Direction.Scale(halfHC))
-
 	d := a2.Subtract(a1)
 	e := cylTop.Subtract(cylBottom)
 	r := a1.Subtract(cylBottom)
@@ -418,7 +417,6 @@ func capsuleSpineVsCylinderAxis(s Capsule, c Cylinder) bool {
 	D := d.Dot(e)
 	E := e.Dot(e)
 	denom := A*E - D*D
-
 	var segS, segT matrix.Float
 	if denom < 1 {
 		segS = 0
@@ -438,7 +436,6 @@ func capsuleSpineVsCylinderAxis(s Capsule, c Cylinder) bool {
 			segT = min(max(segT, 0), 1)
 		}
 	}
-
 	closest := r.Add(d.Scale(segS)).Add(e.Scale(segT))
 	distSq := closest.Dot(closest)
 	rSum := s.Radius + c.Radius
@@ -453,7 +450,6 @@ func capsuleSpinePenetratesCylinder(s Capsule, c Cylinder) bool {
 	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
 	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
 	spine := a2.Subtract(a1)
-
 	for i := 0; i <= 11; i++ {
 		t := matrix.Float(i) / 10
 		pt := a1.Add(spine.Scale(t))
@@ -477,12 +473,10 @@ func cylinderEdgeCircleVsCapsule(s Capsule, c Cylinder) bool {
 	halfH := s.Height / 2
 	a1 := s.Center.Subtract(s.Direction.Scale(halfH))
 	a2 := s.Center.Add(s.Direction.Scale(halfH))
-
 	for _, sign := range []matrix.Float{-1, 1} {
 		ringCenter := c.Center.Add(c.Direction.Scale(sign * c.Height / 2))
 		perpX := c.Direction.Orthogonal()
 		perpY := matrix.Vec3Cross(c.Direction, perpX).Normal()
-
 		for i := 0; i < 16; i++ {
 			angle := matrix.Float(i) * matrix.Float(6.283185307179586) / 16
 			pt := ringCenter.Add(perpX.Scale(c.Radius * matrix.Cos(angle))).Add(perpY.Scale(c.Radius * matrix.Sin(angle)))
@@ -563,7 +557,6 @@ func capsuleSpinePenetratesCone(s Capsule, c Cone) bool {
 	a1 := s.Center.Subtract(s.Direction.Scale(s.Height / 2))
 	a2 := s.Center.Add(s.Direction.Scale(s.Height / 2))
 	spine := a2.Subtract(a1)
-
 	for i := 0; i <= 11; i++ {
 		t := matrix.Float(i) / 10
 		pt := a1.Add(spine.Scale(t))
@@ -592,7 +585,6 @@ func coneBaseCircleVsCapsule(s Capsule, c Cone) bool {
 	coneBase := c.Center.Add(c.Direction.Scale(c.Height / 2))
 	perpX := c.Direction.Orthogonal()
 	perpY := matrix.Vec3Cross(c.Direction, perpX).Normal()
-
 	for i := 0; i < 16; i++ {
 		angle := matrix.Float(i) * matrix.Float(6.283185307179586) / 16
 		pt := coneBase.Add(perpX.Scale(c.Radius * matrix.Cos(angle))).Add(perpY.Scale(c.Radius * matrix.Sin(angle)))

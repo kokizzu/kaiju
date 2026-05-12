@@ -52,10 +52,8 @@ func testTransform(position matrix.Vec3) *matrix.Transform {
 func TestAddSubBVHInsertsProxyLeaf(t *testing.T) {
 	transform := testTransform(matrix.Vec3Zero())
 	sub := NewBVH([]HitObject{AABBFromWidth(matrix.Vec3Zero(), 1)}, transform, "hit")
-
 	var world *BVH
 	proxy := AddSubBVH(&world, sub, transform)
-
 	if proxy == nil {
 		t.Fatal("expected proxy node")
 	}
@@ -74,7 +72,6 @@ func TestAddSubBVHInsertsProxyLeaf(t *testing.T) {
 	if sub.Parent != nil {
 		t.Fatal("sub BVH should not be spliced into the world tree")
 	}
-
 	ray := Ray{
 		Origin:    matrix.NewVec3(0, 0, -5),
 		Direction: matrix.NewVec3(0, 0, 1),
@@ -91,14 +88,11 @@ func TestAddSubBVHInsertsProxyLeaf(t *testing.T) {
 func TestProxyLeafRefitUpdatesWorldBounds(t *testing.T) {
 	transform := testTransform(matrix.Vec3Zero())
 	sub := NewBVH([]HitObject{AABBFromWidth(matrix.Vec3Zero(), 1)}, transform, "moved")
-
 	var world *BVH
 	proxy := AddSubBVH(&world, sub, transform)
-
 	transform.SetPosition(matrix.NewVec3(10, 0, 0))
 	sub.Refit()
 	proxy.RefitUpwards()
-
 	oldRay := Ray{
 		Origin:    matrix.NewVec3(0, 0, -5),
 		Direction: matrix.NewVec3(0, 0, 1),
@@ -106,7 +100,6 @@ func TestProxyLeafRefitUpdatesWorldBounds(t *testing.T) {
 	if _, _, ok := world.RayIntersect(oldRay, 20); ok {
 		t.Fatal("expected old world bounds to miss after proxy refit")
 	}
-
 	newRay := Ray{
 		Origin:    matrix.NewVec3(10, 0, -5),
 		Direction: matrix.NewVec3(0, 0, 1),
@@ -123,11 +116,9 @@ func TestProxyLeafRefitUpdatesWorldBounds(t *testing.T) {
 func TestRemoveBVHNodeRemovesProxyLeaf(t *testing.T) {
 	transform := testTransform(matrix.Vec3Zero())
 	sub := NewBVH([]HitObject{AABBFromWidth(matrix.Vec3Zero(), 1)}, transform, "hit")
-
 	var world *BVH
 	proxy := AddSubBVH(&world, sub, transform)
 	RemoveBVHNode(&world, proxy)
-
 	if world != nil {
 		t.Fatal("expected world BVH to be empty after removing only proxy")
 	}

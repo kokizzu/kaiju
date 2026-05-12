@@ -1,5 +1,5 @@
 /******************************************************************************/
-/* constraint_island_test.go                                                   */
+/* constraint_island_test.go                                                  */
 /******************************************************************************/
 /*                            This file is part of                            */
 /*                                KAIJU ENGINE                                */
@@ -46,7 +46,6 @@ import (
 func TestConstraintSolverBuildsIndependentIslands(t *testing.T) {
 	system := System{}
 	system.Initialize()
-
 	a := addSystemSphere(&system, matrix.Vec3{0, 0, 0}, RigidBodyTypeDynamic)
 	b := addSystemSphere(&system, matrix.Vec3{2, 0, 0}, RigidBodyTypeDynamic)
 	c := addSystemSphere(&system, matrix.Vec3{8, 0, 0}, RigidBodyTypeDynamic)
@@ -55,11 +54,9 @@ func TestConstraintSolverBuildsIndependentIslands(t *testing.T) {
 		system.NewConstraint(ConstraintTypeGeneric, a, b),
 		system.NewConstraint(ConstraintTypeGeneric, c, d),
 	}
-
 	solver := CollisionSolver{}
 	solver.Initialize()
 	solver.buildIslands(nil, constraints)
-
 	if len(solver.islands) != 2 {
 		t.Fatalf("expected 2 independent constraint islands, got %d", len(solver.islands))
 	}
@@ -78,7 +75,6 @@ func TestConstraintSolverBuildsIndependentIslands(t *testing.T) {
 func TestConstraintMergesContactIslands(t *testing.T) {
 	system := System{}
 	system.Initialize()
-
 	a := addSystemSphere(&system, matrix.Vec3{0, 0, 0}, RigidBodyTypeDynamic)
 	b := addSystemSphere(&system, matrix.Vec3{1.5, 0, 0}, RigidBodyTypeDynamic)
 	c := addSystemSphere(&system, matrix.Vec3{5, 0, 0}, RigidBodyTypeDynamic)
@@ -94,11 +90,9 @@ func TestConstraintMergesContactIslands(t *testing.T) {
 	constraints := []*Constraint{
 		system.NewConstraint(ConstraintTypeGeneric, b, c),
 	}
-
 	solver := CollisionSolver{}
 	solver.Initialize()
 	solver.buildIslands([]ContactManifold{ab, cd}, constraints)
-
 	if len(solver.islands) != 1 {
 		t.Fatalf("expected constraint to merge contact islands, got %d islands", len(solver.islands))
 	}
@@ -116,7 +110,6 @@ func TestConstraintParallelIndependentIslands(t *testing.T) {
 	threads.Initialize()
 	threads.Start()
 	defer threads.Stop()
-
 	system := System{}
 	system.Initialize()
 	constraints := make([]*Constraint, 0, 32)
@@ -138,13 +131,11 @@ func TestConstraintParallelIndependentIslands(t *testing.T) {
 		constraints = append(constraints, constraint)
 		bodies = append(bodies, a, b)
 	}
-
 	solver := CollisionSolver{}
 	solver.Initialize()
 	solver.VelocityIterations = 1
 	solver.PositionIterations = 0
 	solver.SolveWithConstraints(nil, constraints, &threads)
-
 	if len(solver.islands) != len(constraints) {
 		t.Fatalf("expected %d independent constraint islands, got %d",
 			len(constraints), len(solver.islands))

@@ -46,9 +46,8 @@ import (
 // where BodyA receives the negative impulse and BodyB receives the positive
 // impulse.
 type ConstraintSolverRow struct {
-	BodyA *RigidBody
-	BodyB *RigidBody
-
+	BodyA              *RigidBody
+	BodyB              *RigidBody
 	Axis               matrix.Vec3
 	JacobianLinearA    matrix.Vec3
 	JacobianAngularA   matrix.Vec3
@@ -69,9 +68,8 @@ type ConstraintSolverRow struct {
 // used by constraints that must remove relative angular velocity around a
 // world-space axis without applying any linear impulse.
 type AngularConstraintSolverRow struct {
-	BodyA *RigidBody
-	BodyB *RigidBody
-
+	BodyA              *RigidBody
+	BodyB              *RigidBody
 	Axis               matrix.Vec3
 	EffectiveMass      matrix.Float
 	Bias               matrix.Float

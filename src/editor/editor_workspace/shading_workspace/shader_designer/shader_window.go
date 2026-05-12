@@ -335,7 +335,7 @@ func importShaderLayout(pfs *project_file_system.FileSystem, shader rendering.Sh
 	}
 	for i := range list {
 		if list[i].path != "" {
-			s := filepath.Join(pfs.Name(), "/", strings.TrimPrefix(filepath.ToSlash(list[i].path), shaderSrcFolder))
+			s := filepath.Join(pfs.Name(), strings.TrimPrefix(filepath.ToSlash(list[i].path), shaderSrcFolder))
 			c, err := glsl.Parse(s, list[i].flags)
 			if err != nil {
 				return shader, err

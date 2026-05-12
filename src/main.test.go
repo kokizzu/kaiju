@@ -39,6 +39,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
@@ -50,6 +51,8 @@ import (
 	"kaijuengine.com/bootstrap"
 	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/assets"
+	"kaijuengine.com/engine/systems/console"
+	"kaijuengine.com/engine/ui"
 	"kaijuengine.com/matrix"
 	"kaijuengine.com/registry/shader_data_registry"
 	"kaijuengine.com/rendering"
@@ -59,8 +62,10 @@ const rawContentPath = `editor/editor_embedded_content/editor_content`
 const gameContentPath = `game_content`
 
 type Game struct {
-	host *engine.Host
-	ball *engine.Entity
+	host  *engine.Host
+	ball  *engine.Entity
+	ui    *ui.Manager
+	label *ui.Label
 }
 
 func (Game) PluginRegistry() []reflect.Type {
@@ -82,6 +87,8 @@ func (Game) ContentDatabase() (assets.Database, error) {
 func (g *Game) Launch(host *engine.Host) {
 	// TODO:  The world is your oyster
 	g.host = host
+	g.ui = &ui.Manager{}
+	g.ui.Init(g.host)
 	sphere := rendering.NewMeshSphere(host.MeshCache(), 1, 32, 32)
 	sd := shader_data_registry.Create("basic")
 	g.ball = engine.NewEntity(host.WorkGroup())
@@ -107,10 +114,28 @@ func (g *Game) Launch(host *engine.Host) {
 		sd.Destroy()
 		host.Updater.RemoveUpdate(&updateId)
 	})
+	g.label = g.ui.Add().ToLabel()
+	g.label.Init("FPS: -")
+	g.label.SetColor(matrix.ColorAqua())
+	g.label.SetBGColor(matrix.ColorTransparent())
+	p := g.ui.Add().ToPanel()
+	p.Init(tex, ui.ElementTypePanel)
+	p.SetColor(matrix.ColorTransparent())
+	p.AddChild(g.label.Base())
+
+	updateUIID := g.host.UIUpdater.AddUpdate(g.updateUI)
+	g.label.Base().Entity().OnDestroy.Add(func() {
+		host.UIUpdater.RemoveUpdate(&updateUIID)
+	})
+}
+
+func (g *Game) updateUI(deltaTime float64) {
+	g.label.SetText(fmt.Sprintf("FPS: %.2f", 1/deltaTime))
 }
 
 func (g *Game) update(deltaTime float64) {
 	x := math.Sin(g.host.Runtime())
+	console.For(g.host).Write(g.ball.Transform.Position().String()) // Open console in game (debug flag) with F1
 	g.ball.Transform.SetPosition(matrix.NewVec3(matrix.Float(x), 0, -3))
 }
 

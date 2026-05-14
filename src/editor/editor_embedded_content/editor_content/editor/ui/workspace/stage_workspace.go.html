@@ -307,6 +307,11 @@
 				font-size: 0.7em;
 				font-family: 'MaterialIcons-Regular';
 			}
+			.edColorPickInput {
+				width: 100%;
+				height: 2em;
+				border: 5px solid black;
+			}
 			.center { text-align: center; }
 			.dataControls {
 				width: 4.5em;
@@ -398,10 +403,7 @@
 								</div>
 								<!-- Color -->
 								<div>
-									<input class="smallerInput" type="text" placeholder="R..." onchange="changeShaderData" />
-									<input class="smallerInput" type="text" placeholder="G..." onchange="changeShaderData" />
-									<input class="smallerInput" type="text" placeholder="B..." onchange="changeShaderData" />
-									<input class="smallerInput" type="text" placeholder="A..." onchange="changeShaderData" />
+									<div class="edColorPickInput" data-shader="true" onclick="showColorPicker"></div>
 								</div>
 								<!-- Select input -->
 								<div>
@@ -450,10 +452,7 @@
 								</div>
 								<!-- Color -->
 								<div>
-									<input class="smallerInput" type="text" placeholder="R..." onchange="changeData" />
-									<input class="smallerInput" type="text" placeholder="G..." onchange="changeData" />
-									<input class="smallerInput" type="text" placeholder="B..." onchange="changeData" />
-									<input class="smallerInput" type="text" placeholder="A..." onchange="changeData" />
+									<div class="edColorPickInput" onclick="showColorPicker"></div>
 								</div>
 								<!-- Select input -->
 								<div>

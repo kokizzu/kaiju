@@ -47,6 +47,7 @@ import (
 
 	"kaijuengine.com/editor/codegen"
 	"kaijuengine.com/editor/codegen/entity_data_binding"
+	"kaijuengine.com/editor/editor_overlay/color_picker"
 	"kaijuengine.com/editor/editor_overlay/content_selector"
 	"kaijuengine.com/editor/editor_overlay/context_menu"
 	"kaijuengine.com/editor/editor_stage_manager"
@@ -153,6 +154,7 @@ func (dui *WorkspaceDetailsUI) setupFuncs() map[string]func(*document.Element) {
 		"pasteEntityData":         dui.pasteEntityData,
 		"copyEntityData":          dui.copyEntityData,
 		"removeEntityData":        dui.removeEntityData,
+		"showColorPicker":         dui.showColorPicker,
 		"changeShaderData":        dui.changeShaderData,
 		"clickSelectContentId":    dui.clickSelectContentId,
 		"contentIdDrop":           dui.contentIdDrop,
@@ -589,11 +591,11 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 		} else if g.Fields[i].IsColor() {
 			colorInput.UI.Show()
 			valReload = func() {
+				color := matrix.Color{}
 				for j := range 4 {
-					c := colorInput.Children[j].UI.ToInput()
-					c.SetTextWithoutEvent(g.FieldVectorComponentAsString(i, j))
-					colorInput.Children[j].SetAttribute("data-inneridx", strconv.Itoa(j))
+					color[j] = g.FieldVectorComponent(i, j)
 				}
+				colorInput.Children[0].UI.ToPanel().SetColor(color)
 			}
 		}
 		if valReload != nil {
@@ -615,6 +617,21 @@ func (dui *WorkspaceDetailsUI) changeShaderData(e *document.Element) {
 func (dui *WorkspaceDetailsUI) changeData(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.changeData").End()
 	dui.commonChangeData(e, false)
+}
+
+func (dui *WorkspaceDetailsUI) showColorPicker(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.showColorPicker").End()
+	w := dui.workspace.Value()
+	w.ed.BlurInterface()
+	color_picker.Show(w.Host, color_picker.Config{
+		Color: e.UI.ToPanel().Color(),
+		OnAccept: func(color matrix.Color) {
+			w.ed.FocusInterface()
+			e.UI.ToPanel().SetColor(color)
+			dui.commonChangeData(e, e.Attribute("data-shader") == "true")
+		},
+		OnCancel: w.ed.FocusInterface,
+	})
 }
 
 func (dui *WorkspaceDetailsUI) clickSelectContentId(e *document.Element) {
@@ -858,7 +875,7 @@ func (dui *WorkspaceDetailsUI) commonChangeData(e *document.Element, isShaderDat
 		}
 	}
 	if success {
-		if h.From != h.To {
+		if !reflect.DeepEqual(h.From, h.To) {
 			w.ed.History().Add(h)
 		}
 	}
@@ -898,6 +915,13 @@ func reflectAssignChanges(e *document.Element, v reflect.Value) bool {
 		v.SetString(inputText)
 	case reflect.Bool:
 		v.SetBool(e.UI.ToCheckbox().IsChecked())
+	case reflect.Array, reflect.Slice:
+		if e.HasClass("edColorPickInput") {
+			color := e.UI.ToPanel().Color()
+			for j := 0; j < len(color) && j < v.Len(); j++ {
+				v.Index(j).SetFloat(float64(color[j]))
+			}
+		}
 	}
 	return true
 }

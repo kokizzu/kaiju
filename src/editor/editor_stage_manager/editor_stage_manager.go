@@ -695,14 +695,8 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	materialId := desc.Material
 	textureIds := desc.Textures
 	var km kaiju_mesh.KaijuMesh
-	// TODO:  This is a hack, the quad/plane may need to be added to the stock
-	// folder. They are special here because the're used for textures in 3D/2D.
-	switch meshId {
-	case "quad":
-		km.Verts, km.Indexes = rendering.MeshQuadData()
-	case "plane":
-		km.Verts, km.Indexes = rendering.MeshPlaneData()
-	default:
+	var builtIn bool
+	if km.Verts, km.Indexes, builtIn = rendering.BuiltInMeshData(meshId); !builtIn {
 		meshPath := filepath.Join(rootFolder, meshFolder, meshId)
 		kmData, err := fs.ReadFile(meshPath)
 		if err != nil {
@@ -758,7 +752,7 @@ func (m *StageManager) spawnLoadedEntity(e *StageEntity, host *engine.Host, fs *
 	mat = mat.CreateInstance(texs)
 	e.StageData.ShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
 	e.StageData.Mesh = mesh
-	missingBVH := km.BVH == nil && meshId != "quad" && meshId != "plane"
+	missingBVH := km.BVH == nil && !builtIn
 	e.StageData.Bvh = km.GenerateBVH(host.Threads(), &e.Transform, e)
 	if missingBVH {
 		content_database.SaveMeshBVHInBackground(km,

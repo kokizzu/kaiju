@@ -39,6 +39,7 @@ package rendering
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"kaijuengine.com/engine/graviton"
 	"kaijuengine.com/matrix"
@@ -48,6 +49,7 @@ import (
 type MeshDrawMode = int
 type MeshCullMode = int
 type QuadPivot = int32
+type PrimitiveMesh string
 
 const (
 	MeshDrawModePoints MeshDrawMode = iota
@@ -72,6 +74,16 @@ const (
 	QuadPivotBottomRight
 	QuadPivotTopLeft
 	QuadPivotTopRight
+)
+
+const (
+	PrimitiveMeshSphere         PrimitiveMesh = "sphere_1.00_32_32"
+	PrimitiveMeshTexturableCube PrimitiveMesh = "texturable_cube"
+	PrimitiveMeshCapsule        PrimitiveMesh = "capsule_0.50_1.00_32_8"
+	PrimitiveMeshPlane          PrimitiveMesh = "plane"
+	PrimitiveMeshCylinder       PrimitiveMesh = "cylinder_1.00_0.50_32_true"
+	PrimitiveMeshCone           PrimitiveMesh = "cone_1.00_0.50_32_true"
+	PrimitiveMeshArrow          PrimitiveMesh = "arrow_0.75_0.05_0.25_0.15_32_"
 )
 
 type Mesh struct {
@@ -136,6 +148,74 @@ func (m *Mesh) DelayedCreate(device *GPUDevice) {
 func (m Mesh) Key() string           { return m.key }
 func (m Mesh) IsReady() bool         { return m.MeshId.IsValid() }
 func (m Mesh) Bounds() graviton.AABB { return m.bounds }
+
+func NewMeshPrimitive(cache *MeshCache, primitive PrimitiveMesh) *Mesh {
+	switch primitive {
+	case PrimitiveMeshSphere:
+		return NewMeshSphere(cache, 1, 32, 32)
+	case PrimitiveMeshTexturableCube:
+		return NewMeshTexturableCube(cache)
+	case PrimitiveMeshCapsule:
+		return NewMeshCapsule(cache, 0.5, 1, 32, 8)
+	case PrimitiveMeshPlane:
+		return NewMeshPlane(cache)
+	case PrimitiveMeshCylinder:
+		return NewMeshCylinder(cache, 1, 0.5, 32, true)
+	case PrimitiveMeshCone:
+		return NewMeshCone(cache, 1, 0.5, 32, true)
+	case PrimitiveMeshArrow:
+		return NewMeshArrow(cache, 0.75, 0.05, 0.25, 0.15, 32)
+	default:
+		return nil
+	}
+}
+
+func BuiltInMeshData(key string) ([]Vertex, []uint32, bool) {
+	switch key {
+	case "quad":
+		verts, indexes := MeshQuadData()
+		return verts, slices.Clone(indexes), true
+	case "plane":
+		verts, indexes := MeshPlaneData()
+		return verts, slices.Clone(indexes), true
+	case "cube":
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshCube(cache)
+		})
+	case string(PrimitiveMeshSphere):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshSphere(cache, 1, 32, 32)
+		})
+	case string(PrimitiveMeshTexturableCube):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshTexturableCube(cache)
+		})
+	case string(PrimitiveMeshCapsule):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshCapsule(cache, 0.5, 1, 32, 8)
+		})
+	case string(PrimitiveMeshCylinder):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshCylinder(cache, 1, 0.5, 32, true)
+		})
+	case string(PrimitiveMeshCone):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshCone(cache, 1, 0.5, 32, true)
+		})
+	case string(PrimitiveMeshArrow):
+		return builtInGeneratedMeshData(func(cache *MeshCache) *Mesh {
+			return NewMeshArrow(cache, 0.75, 0.05, 0.25, 0.15, 32)
+		})
+	default:
+		return nil, nil, false
+	}
+}
+
+func builtInGeneratedMeshData(create func(*MeshCache) *Mesh) ([]Vertex, []uint32, bool) {
+	cache := NewMeshCache(nil, nil)
+	mesh := create(&cache)
+	return slices.Clone(mesh.pendingVerts), slices.Clone(mesh.pendingIndexes), true
+}
 
 var (
 	meshQuadUvs         = [4]matrix.Vec2{{0, 1}, {0, 0}, {1, 0}, {1, 1}}

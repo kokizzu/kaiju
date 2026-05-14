@@ -356,13 +356,8 @@ func SetupEntityFromDescription(e *engine.Entity, host *engine.Host, se *EntityD
 	textureIds := se.Textures
 	var km kaiju_mesh.KaijuMesh
 	var err error
-	// TODO:  Should these just be in the content database (no switch)?
-	switch meshId {
-	case "quad":
-		km.Verts, km.Indexes = rendering.MeshQuadData()
-	case "plane":
-		km.Verts, km.Indexes = rendering.MeshPlaneData()
-	default:
+	var builtIn bool
+	if km.Verts, km.Indexes, builtIn = rendering.BuiltInMeshData(meshId); !builtIn {
 		var kmData []byte
 		kmData, err = ad.Read(meshId)
 		if err != nil {

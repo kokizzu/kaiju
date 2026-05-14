@@ -51,6 +51,7 @@ import (
 	"kaijuengine.com/editor/project/project_database/content_database"
 	"kaijuengine.com/editor/project/project_file_system"
 	"kaijuengine.com/platform/profiler/tracing"
+	"kaijuengine.com/rendering"
 )
 
 // StageWorkspaceSelected will inform the editor that the developer has
@@ -280,6 +281,10 @@ func (ed *Editor) CreateNewEntity() {
 
 func (ed *Editor) CreateNewLight() {
 	ed.workspaces.stage.CreateNewLight()
+}
+
+func (ed *Editor) CreatePrimitive(primitive rendering.PrimitiveMesh) {
+	ed.workspaces.stage.CreatePrimitive(primitive)
 }
 
 func (ed *Editor) ConnectSelectedAsDistanceChain() {

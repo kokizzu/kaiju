@@ -43,6 +43,7 @@ import (
 	"kaijuengine.com/editor/memento"
 	"kaijuengine.com/editor/project"
 	"kaijuengine.com/editor/project/project_file_system"
+	"kaijuengine.com/rendering"
 )
 
 type MenuBarHandler interface {
@@ -69,6 +70,7 @@ type MenuBarHandler interface {
 	CreateNewCamera()
 	CreateNewEntity()
 	CreateNewLight()
+	CreatePrimitive(primitive rendering.PrimitiveMesh)
 	ConnectSelectedAsDistanceChain()
 	ConnectSelectedAsRope()
 	ConnectSelectedAsHingeChain()

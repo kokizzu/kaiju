@@ -59,6 +59,7 @@ import (
 	"kaijuengine.com/klib"
 	"kaijuengine.com/platform/filesystem"
 	"kaijuengine.com/platform/profiler/tracing"
+	"kaijuengine.com/rendering"
 )
 
 type MenuBar struct {
@@ -120,6 +121,13 @@ func (b *MenuBar) Initialize(host *engine.Host, handler MenuBarHandler) error {
 			"clickNewCamera":           b.clickNewCamera,
 			"clickNewEntity":           b.clickNewEntity,
 			"clickNewLight":            b.clickNewLight,
+			"clickCreateSphere":        b.clickCreateSphere,
+			"clickCreateCube":          b.clickCreateCube,
+			"clickCreateCapsule":       b.clickCreateCapsule,
+			"clickCreatePlane":         b.clickCreatePlane,
+			"clickCreateCylinder":      b.clickCreateCylinder,
+			"clickCreateCone":          b.clickCreateCone,
+			"clickCreateArrow":         b.clickCreateArrow,
 			"clickAbout":               b.clickAbout,
 			"clickLogs":                b.clickLogs,
 			"clickIssues":              b.clickIssues,
@@ -462,6 +470,46 @@ func (b *MenuBar) clickNewLight(*document.Element) {
 	defer tracing.NewRegion("MenuBar.clickNewLight").End()
 	b.hidePopups()
 	b.handler.CreateNewLight()
+}
+
+func (b *MenuBar) clickCreateSphere(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateSphere").End()
+	b.createPrimitive(rendering.PrimitiveMeshSphere)
+}
+
+func (b *MenuBar) clickCreateCube(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateCube").End()
+	b.createPrimitive(rendering.PrimitiveMeshTexturableCube)
+}
+
+func (b *MenuBar) clickCreateCapsule(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateCapsule").End()
+	b.createPrimitive(rendering.PrimitiveMeshCapsule)
+}
+
+func (b *MenuBar) clickCreatePlane(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreatePlane").End()
+	b.createPrimitive(rendering.PrimitiveMeshPlane)
+}
+
+func (b *MenuBar) clickCreateCylinder(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateCylinder").End()
+	b.createPrimitive(rendering.PrimitiveMeshCylinder)
+}
+
+func (b *MenuBar) clickCreateCone(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateCone").End()
+	b.createPrimitive(rendering.PrimitiveMeshCone)
+}
+
+func (b *MenuBar) clickCreateArrow(*document.Element) {
+	defer tracing.NewRegion("MenuBar.clickCreateArrow").End()
+	b.createPrimitive(rendering.PrimitiveMeshArrow)
+}
+
+func (b *MenuBar) createPrimitive(primitive rendering.PrimitiveMesh) {
+	b.hidePopups()
+	b.handler.CreatePrimitive(primitive)
 }
 
 func (b *MenuBar) clickAbout(*document.Element) {

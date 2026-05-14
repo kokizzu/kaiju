@@ -100,6 +100,80 @@ func (w *StageWorkspace) CreateNewLight() (*editor_stage_manager.StageEntity, bo
 	return w.createDataBoundEntity("Light", engine_entity_data_light.BindingKey())
 }
 
+func (w *StageWorkspace) CreatePrimitive(primitive rendering.PrimitiveMesh) (*editor_stage_manager.StageEntity, bool) {
+	defer tracing.NewRegion("StageWorkspace.CreatePrimitive").End()
+	w.ed.History().BeginTransaction()
+	defer w.ed.History().CommitTransaction()
+	mesh := rendering.NewMeshPrimitive(w.Host.MeshCache(), primitive)
+	if mesh == nil {
+		slog.Error("failed to create the primitive mesh", "primitive", primitive)
+		return nil, false
+	}
+	mat, err := w.Host.MaterialCache().Material(assets.MaterialDefinitionBasic)
+	if err != nil {
+		slog.Error("failed to find the basic material", "error", err)
+		return nil, false
+	}
+	tex, err := w.Host.TextureCache().Texture(assets.TextureSquare,
+		rendering.TextureFilterLinear)
+	if err != nil {
+		slog.Error("failed to create the default texture", "error", err)
+		return nil, false
+	}
+	mat = mat.CreateInstance([]*rendering.Texture{tex})
+	verts, indexes, ok := rendering.BuiltInMeshData(mesh.Key())
+	if !ok {
+		slog.Error("failed to find the primitive mesh data", "mesh", mesh.Key())
+		return nil, false
+	}
+	man := w.stageView.Manager()
+	e := man.AddEntity(primitiveName(primitive), matrix.Vec3Zero())
+	e.StageData.Mesh = mesh
+	e.StageData.Description.Mesh = mesh.Key()
+	e.StageData.Description.Material = mat.Id
+	e.StageData.ShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
+	km := kaiju_mesh.KaijuMesh{Verts: verts, Indexes: indexes}
+	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
+	e.Transform.SetPosition(w.stageView.LookAtPoint())
+	man.AddBVH(e)
+	man.RefitBVH(e)
+	w.Host.RunOnMainThread(func() {
+		tex.DelayedCreate(w.Host.Window.GpuInstance.PrimaryDevice())
+		draw := rendering.Drawing{
+			Material:   mat,
+			Mesh:       e.StageData.Mesh,
+			ShaderData: e.StageData.ShaderData,
+			Transform:  &e.Transform,
+			ViewCuller: &w.Host.Cameras.Primary,
+		}
+		w.Host.Drawings.AddDrawing(draw)
+	})
+	man.ClearSelection()
+	man.SelectEntity(e)
+	return e, true
+}
+
+func primitiveName(primitive rendering.PrimitiveMesh) string {
+	switch primitive {
+	case rendering.PrimitiveMeshSphere:
+		return "Sphere"
+	case rendering.PrimitiveMeshTexturableCube:
+		return "Cube"
+	case rendering.PrimitiveMeshCapsule:
+		return "Capsule"
+	case rendering.PrimitiveMeshPlane:
+		return "Plane"
+	case rendering.PrimitiveMeshCylinder:
+		return "Cylinder"
+	case rendering.PrimitiveMeshCone:
+		return "Cone"
+	case rendering.PrimitiveMeshArrow:
+		return "Arrow"
+	default:
+		return "Primitive"
+	}
+}
+
 func (w *StageWorkspace) createDataBoundEntity(name, bindKey string) (*editor_stage_manager.StageEntity, bool) {
 	defer tracing.NewRegion("StageWorkspace.createDataBoundEntity").End()
 	w.ed.History().BeginTransaction()

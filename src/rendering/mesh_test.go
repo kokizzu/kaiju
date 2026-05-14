@@ -151,6 +151,34 @@ func TestMeshPrimitiveGeneratorsReuseCache(t *testing.T) {
 	}
 }
 
+func TestBuiltInMeshDataForPrimitiveKeys(t *testing.T) {
+	cases := []PrimitiveMesh{
+		PrimitiveMeshSphere,
+		PrimitiveMeshTexturableCube,
+		PrimitiveMeshCapsule,
+		PrimitiveMeshPlane,
+		PrimitiveMeshCylinder,
+		PrimitiveMeshCone,
+		PrimitiveMeshArrow,
+	}
+	for _, c := range cases {
+		cache := NewMeshCache(nil, nil)
+		mesh := NewMeshPrimitive(&cache, c)
+		verts, indexes, ok := BuiltInMeshData(mesh.Key())
+		if !ok {
+			t.Fatalf("expected built-in data for %q", mesh.Key())
+		}
+		if len(verts) != len(mesh.pendingVerts) || len(indexes) != len(mesh.pendingIndexes) {
+			t.Fatalf("%q data counts = %d/%d, want %d/%d",
+				mesh.Key(), len(verts), len(indexes),
+				len(mesh.pendingVerts), len(mesh.pendingIndexes))
+		}
+	}
+	if _, _, ok := BuiltInMeshData("not_a_builtin"); ok {
+		t.Fatal("unexpected built-in mesh data for unknown key")
+	}
+}
+
 func TestMeshAnchoredQuadPivots(t *testing.T) {
 	cases := []struct {
 		pivot QuadPivot

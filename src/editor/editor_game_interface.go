@@ -71,7 +71,7 @@ func (EditorGame) Launch(host *engine.Host) {
 	}
 	// goroutine
 	go func() {
-		data, err := host.AssetDatabase().Read("kiaju-icon.png")
+		data, err := host.AssetDatabase().Read("kaiju-icon.png")
 		if err != nil {
 			slog.Error("failed to read the editor application icon", "error", err)
 			return

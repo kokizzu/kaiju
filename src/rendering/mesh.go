@@ -959,11 +959,11 @@ func NewMeshSphere(cache *MeshCache, radius float32, latitudeBands, longitudeBan
 			first := uint32(lat*(longitudeBands+1) + lon)
 			second := first + uint32(longitudeBands+1)
 			indices[iIdx] = first
-			indices[iIdx+1] = second
-			indices[iIdx+2] = first + 1
+			indices[iIdx+1] = first + 1
+			indices[iIdx+2] = second
 			indices[iIdx+3] = second
-			indices[iIdx+4] = second + 1
-			indices[iIdx+5] = first + 1
+			indices[iIdx+4] = first + 1
+			indices[iIdx+5] = second + 1
 			iIdx += 6
 		}
 	}

@@ -52,6 +52,34 @@ func assertMeshCounts(t *testing.T, mesh *Mesh, verts, indexes int) {
 	}
 }
 
+func assertMeshFacesFollowVertexNormals(t *testing.T, mesh *Mesh) {
+	t.Helper()
+	checked := 0
+	for i := 0; i < len(mesh.pendingIndexes); i += 3 {
+		tri := [3]Vertex{
+			mesh.pendingVerts[mesh.pendingIndexes[i]],
+			mesh.pendingVerts[mesh.pendingIndexes[i+1]],
+			mesh.pendingVerts[mesh.pendingIndexes[i+2]],
+		}
+		faceNormal := VertexFaceNormal(tri)
+		if faceNormal.IsZero() {
+			continue
+		}
+		vertexNormal := tri[0].Normal.Add(tri[1].Normal).Add(tri[2].Normal)
+		if vertexNormal.IsZero() {
+			continue
+		}
+		if faceNormal.Dot(vertexNormal.Normal()) <= 0 {
+			t.Fatalf("%s triangle %d winding opposes vertex normals: face=%v vertex=%v indexes=%v",
+				mesh.Key(), i/3, faceNormal, vertexNormal.Normal(), mesh.pendingIndexes[i:i+3])
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatalf("%s had no non-degenerate triangle to test", mesh.Key())
+	}
+}
+
 func TestNewMeshComputesBounds(t *testing.T) {
 	verts := []Vertex{
 		{Position: matrix.Vec3{-1, 2, -3}},
@@ -240,6 +268,11 @@ func TestMeshSphereGeneration(t *testing.T) {
 	if got := NewMeshSphere(&cache, 2, 2, 3); got != mesh {
 		t.Fatalf("sphere should reuse clamped cache key")
 	}
+}
+
+func TestMeshSphereWindingFollowsVertexNormals(t *testing.T) {
+	cache := NewMeshCache(nil, nil)
+	assertMeshFacesFollowVertexNormals(t, NewMeshSphere(&cache, 1, 8, 8))
 }
 
 func TestMeshWireSphereGeneration(t *testing.T) {

@@ -76,7 +76,7 @@ type EmitterConfig struct {
 	OpacityMinMax    matrix.Vec2
 	Color            matrix.Color
 	PathFuncName     string                      `options:"PathFuncName"`
-	PathFunc         func(t float64) matrix.Vec3 `visible:"hidden"`
+	PathFunc         func(t float64) matrix.Vec3 `visible:"hidden" json:"-"`
 	PathFuncOffset   float64
 	PathFuncScale    float32
 	PathFuncSpeed    float32

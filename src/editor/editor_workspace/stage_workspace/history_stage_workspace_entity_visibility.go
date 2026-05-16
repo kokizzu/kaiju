@@ -42,18 +42,23 @@ import (
 )
 
 type hierarchyEntityChangeVisibilty struct {
-	entity  *editor_stage_manager.StageEntity
-	visible bool
+	entities []*editor_stage_manager.StageEntity
+	previous []bool
+	visible  bool
 }
 
 func (h *hierarchyEntityChangeVisibilty) Redo() {
 	defer tracing.NewRegion("hierarchyEntityChangeVisibilty.Redo").End()
-	h.entity.SetActive(h.visible)
+	for i := range h.entities {
+		h.entities[i].SetActive(h.visible)
+	}
 }
 
 func (h *hierarchyEntityChangeVisibilty) Undo() {
 	defer tracing.NewRegion("hierarchyEntityChangeVisibilty.Undo").End()
-	h.entity.SetActive(!h.visible)
+	for i := range h.entities {
+		h.entities[i].SetActive(h.previous[i])
+	}
 }
 
 func (h *hierarchyEntityChangeVisibilty) Delete() {}

@@ -193,20 +193,26 @@ func (hui *WorkspaceHierarchyUI) entityToggleVisibility(e *document.Element) {
 	id := row.Attribute("id")
 	w := hui.workspace.Value()
 	man := w.stageView.Manager()
-	if entity, ok := man.EntityById(id); ok {
-		if entity.IsActive() {
-			entity.Deactivate()
-			w.ed.History().Add(&hierarchyEntityChangeVisibilty{
-				entity:  entity,
-				visible: false,
-			})
-		} else {
-			entity.Activate()
-			w.ed.History().Add(&hierarchyEntityChangeVisibilty{
-				entity:  entity,
-				visible: true,
-			})
-		}
+	entity, ok := man.EntityById(id)
+	if !ok {
+		return
+	}
+	visible := !entity.IsActive()
+	targets := []*editor_stage_manager.StageEntity{entity}
+	if man.IsSelected(entity) {
+		targets = slices.Clone(man.Selection())
+	}
+	previous := make([]bool, len(targets))
+	for i := range targets {
+		previous[i] = targets[i].IsActive()
+	}
+	w.ed.History().Add(&hierarchyEntityChangeVisibilty{
+		entities: targets,
+		previous: previous,
+		visible:  visible,
+	})
+	for i := range targets {
+		targets[i].SetActive(visible)
 	}
 }
 

@@ -142,17 +142,83 @@ func (hui *WorkspaceHierarchyUI) processHotkeys(host *engine.Host) {
 
 func (hui *WorkspaceHierarchyUI) selectEntity(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceHierarchyUI.selectEntity").End()
-	id := e.Attribute("id")
+	row := hierarchyRow(e)
+	if row == nil {
+		return
+	}
+	id := row.Attribute("id")
 	w := hui.workspace.Value()
 	kb := &w.Host.Window.Keyboard
 	man := w.stageView.Manager()
 	if kb.HasCtrlOrMeta() {
 		man.SelectToggleEntityById(id)
 	} else if kb.HasShift() {
-		man.SelectWithChildrenOrSingleEntityById(id)
+		hui.selectEntityRange(id)
 	} else {
 		man.SelectEntityById(id)
 	}
+}
+
+func (hui *WorkspaceHierarchyUI) selectEntityRange(id string) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.selectEntityRange").End()
+	w := hui.workspace.Value()
+	man := w.stageView.Manager()
+	if !man.HasSelection() {
+		man.SelectEntityById(id)
+		return
+	}
+	anchor := man.LastSelected()
+	if anchor == nil {
+		man.SelectEntityById(id)
+		return
+	}
+	anchorId := anchor.StageData.Description.Id
+	rows := hui.hierarchyRows()
+	anchorIdx, targetIdx := -1, -1
+	for i, row := range rows {
+		switch row.Attribute("id") {
+		case anchorId:
+			anchorIdx = i
+		case id:
+			targetIdx = i
+		}
+	}
+	if anchorIdx == -1 || targetIdx == -1 {
+		man.SelectEntityById(id)
+		return
+	}
+	step := 1
+	if targetIdx < anchorIdx {
+		step = -1
+	}
+	w.ed.History().BeginTransaction()
+	defer w.ed.History().CommitTransaction()
+	man.ClearSelection()
+	for i := anchorIdx; ; i += step {
+		man.SelectAppendEntityById(rows[i].Attribute("id"))
+		if i == targetIdx {
+			break
+		}
+	}
+}
+
+func (hui *WorkspaceHierarchyUI) hierarchyRows() []*document.Element {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.hierarchyRows").End()
+	rows := make([]*document.Element, 0, len(hui.entityList.Children))
+	var collect func(*document.Element)
+	collect = func(row *document.Element) {
+		if row == nil || !row.HasClass("hierarchyEntry") || row == hui.entityTemplate {
+			return
+		}
+		rows = append(rows, row)
+		for i := hierarchyEntryChildStart; i < len(row.Children); i++ {
+			collect(row.Children[i])
+		}
+	}
+	for i := hierarchyEntryChildStart; i < len(hui.entityList.Children); i++ {
+		collect(hui.entityList.Children[i])
+	}
+	return rows
 }
 
 func (hui *WorkspaceHierarchyUI) entityToggleChildren(e *document.Element) {

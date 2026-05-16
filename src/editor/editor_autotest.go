@@ -71,8 +71,8 @@ func (ed *Editor) initAutoTest() bool {
 			{label: "Creating new entity", call: ed.CreateNewEntity, wait: 5},
 			{label: "Testing undo operation", call: ed.history.Undo, wait: 5},
 			{label: "Testing redo operation", call: ed.history.Redo, wait: 5},
-			{label: "Switching to content workspace", call: ed.ContentWorkspaceSelected, wait: 5},
-			{label: "Switching back to stage workspace", call: ed.StageWorkspaceSelected, wait: 5},
+			{label: "Switching to content workspace", call: func() { ed.WorkspaceSelected("content") }, wait: 5},
+			{label: "Switching back to stage workspace", call: func() { ed.WorkspaceSelected("stage") }, wait: 5},
 		}
 		slog.Info("AutoTest mode enabled - will run automated integration tests")
 		return true

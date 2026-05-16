@@ -456,7 +456,7 @@ func (cui *WorkspaceContentUI) rightClickContent(e *document.Element) {
 		{
 			Label: "Open in content workspace",
 			Call: func() {
-				w.ed.ContentWorkspaceSelected()
+				w.ed.SelectWorkspace("content")
 				w.ed.Events().OnFocusContent.Execute(id)
 			},
 		},

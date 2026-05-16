@@ -54,10 +54,11 @@ import (
 	"kaijuengine.com/editor/editor_overlay/context_menu"
 	"kaijuengine.com/editor/editor_overlay/file_browser"
 	"kaijuengine.com/editor/editor_overlay/input_prompt"
+	"kaijuengine.com/editor/editor_workspace"
 	"kaijuengine.com/editor/editor_workspace/common_workspace"
+	"kaijuengine.com/editor/editor_workspace_registry"
 	"kaijuengine.com/editor/project/project_database/content_database"
 	"kaijuengine.com/editor/project/project_file_system"
-	"kaijuengine.com/engine"
 	"kaijuengine.com/engine/ui/markup/document"
 	"kaijuengine.com/klib"
 	"kaijuengine.com/matrix"
@@ -66,11 +67,24 @@ import (
 	"kaijuengine.com/rendering"
 )
 
+const (
+	// ID is the stable workspace identifier used for registration, settings,
+	// and SelectWorkspace calls.
+	ID = "content"
+
+	// DisplayName is the label shown on the content workspace's menu bar tab.
+	DisplayName = "Content"
+)
+
+func init() {
+	editor_workspace_registry.Register(&ContentWorkspace{})
+}
+
 type ContentWorkspace struct {
 	common_workspace.CommonWorkspace
 	pfs                *project_file_system.FileSystem
 	cache              *content_database.Cache
-	editor             ContentWorkspaceEditorInterface
+	editor             editor_workspace.WorkspaceEditorInterface
 	typeFilters        klib.Set[string]
 	typeFiltersDisable klib.Set[string]
 	tagFilters         klib.Set[string]
@@ -102,14 +116,19 @@ type ContentWorkspace struct {
 	}
 }
 
-func (w *ContentWorkspace) Initialize(host *engine.Host, editor ContentWorkspaceEditorInterface) {
+func (w *ContentWorkspace) ID() string          { return ID }
+func (w *ContentWorkspace) DisplayName() string { return DisplayName }
+func (w *ContentWorkspace) IsRequired() bool    { return true }
+
+func (w *ContentWorkspace) Initialize(ed editor_workspace.WorkspaceEditorInterface) error {
 	defer tracing.NewRegion("ContentWorkspace.Initialize").End()
-	w.pfs = editor.ProjectFileSystem()
-	w.cache = editor.Cache()
-	w.editor = editor
+	host := ed.Host()
+	w.pfs = ed.ProjectFileSystem()
+	w.cache = ed.Cache()
+	w.editor = ed
 	w.audio.workspace = weak.Make(w)
 	ids := w.pageData.SetupUIData(w.cache)
-	w.CommonWorkspace.InitializeWithUI(host,
+	if err := w.CommonWorkspace.InitializeWithUI(host,
 		"editor/ui/workspace/content_workspace.go.html", w.pageData, map[string]func(*document.Element){
 			"inputFilter":         w.inputFilter,
 			"tagFilter":           w.tagFilter,
@@ -132,7 +151,9 @@ func (w *ContentWorkspace) Initialize(host *engine.Host, editor ContentWorkspace
 			"clickPlayAudio":      w.clickPlayAudio,
 			"changeAudioPosition": w.changeAudioPosition,
 			"clickOpenInEditor":   w.clickOpenInEditor,
-		})
+		}); err != nil {
+		return err
+	}
 	w.tagFilters = klib.NewSet[string]()
 	w.tagFiltersDisable = klib.NewSet[string]()
 	w.typeFilters = klib.NewSet[string]()
@@ -165,6 +186,17 @@ func (w *ContentWorkspace) Initialize(host *engine.Host, editor ContentWorkspace
 	edEvts.OnTagNoLongerInUse.Add(w.handleTagNoLongerInUse)
 	edEvts.OnContentAdded.Execute(ids)
 	w.audio.audioPlayer.UI.Entity().OnDeactivate.Add(w.audio.stopAudio)
+	return nil
+}
+
+// Shutdown is called when the editor disables this workspace at runtime. It
+// drops the UI document. (Event subscriptions are not currently tracked for
+// removal — the editor process owns the EditorEvents lifetime so leaked
+// subscriptions are harmless until restart. Add explicit Remove calls if
+// disabling/re-enabling within a session becomes a hot path.)
+func (w *ContentWorkspace) Shutdown() {
+	defer tracing.NewRegion("ContentWorkspace.Shutdown").End()
+	w.CommonShutdown()
 }
 
 func (w *ContentWorkspace) Open() {
@@ -808,7 +840,7 @@ func (w *ContentWorkspace) rightClickContent(e *document.Element) {
 		} else if cc.Config.Type == (content_database.Html{}).TypeName() {
 			options = append(options, context_menu.ContextMenuOption{
 				Label: "View in UI workspace",
-				Call:  func() { w.editor.ViewHtmlUi(id) },
+				Call:  func() { w.editor.Events().OnRequestViewHtmlUi.Execute(id) },
 			})
 		}
 		if isEditableText {
@@ -982,8 +1014,7 @@ func (w *ContentWorkspace) openInEditor(cc content_database.CachedContent) {
 	case content_database.Texture{}.TypeName():
 		ed = w.editor.Settings().ImageEditor
 	case content_database.ParticleSystem{}.TypeName():
-		w.editor.VfxWorkspaceSelected()
-		w.editor.VfxWorkspace().OpenParticleSystem(cc.Id())
+		w.editor.Events().OnRequestOpenParticleSystem.Execute(cc.Id())
 		return
 	case content_database.Material{}.TypeName():
 		fallthrough
@@ -992,11 +1023,10 @@ func (w *ContentWorkspace) openInEditor(cc content_database.CachedContent) {
 	case content_database.ShaderPipeline{}.TypeName():
 		fallthrough
 	case content_database.Shader{}.TypeName():
-		w.editor.ShadingWorkspaceSelected()
-		w.editor.ShadingWorkspace().OpenSpec(cc.Id())
+		w.editor.Events().OnRequestOpenShadingSpec.Execute(cc.Id())
 		return
 	case content_database.Stage{}.TypeName():
-		w.editor.OpenStageInStageWorkspace(cc.Id())
+		w.editor.Events().OnRequestOpenStage.Execute(cc.Id())
 	case content_database.TableOfContents{}.TypeName():
 		w.showTableOfContents(cc.Id())
 		return

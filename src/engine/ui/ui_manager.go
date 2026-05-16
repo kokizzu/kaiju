@@ -187,6 +187,34 @@ func (man *Manager) Clear() {
 	// will remove the entry from the pool
 }
 
+// Shutdown synchronously detaches the Manager from its host: removes its
+// update from UIUpdater, detaches its Group from UILateUpdater, and removes
+// its window-resize handler. It also clears any UI elements still owned by
+// the Manager so the next Init starts clean.
+//
+// This is safe to call when Manager hasn't been Init'd yet (no-op). It is
+// also idempotent — calling it twice in a row tears down nothing the second
+// time. After Shutdown the Manager can be Init'd again on the same or a
+// different host.
+//
+// Without this, calling Init twice on the same Manager (which happens when
+// a workspace is disabled then re-enabled in the editor) leaves the
+// previous update callback registered, so two goroutines race on the same
+// Manager's iteration slices and panic with index-out-of-range.
+func (man *Manager) Shutdown() {
+	defer tracing.NewRegion("ui.Manager.Shutdown").End()
+	if man.Host == nil {
+		return
+	}
+	man.Clear()
+	man.Group.Detach(man.Host)
+	man.Host.UIUpdater.RemoveUpdate(&man.updateId)
+	if man.Host.Window != nil {
+		man.Host.Window.OnResize.Remove(man.resizeEvtId)
+	}
+	man.Host = nil
+}
+
 func (man *Manager) Add() *UI {
 	defer tracing.NewRegion("ui.Manager.Add").End()
 	ui, poolId, elmId := man.pools.Add()

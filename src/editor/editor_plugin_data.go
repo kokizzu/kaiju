@@ -76,12 +76,18 @@ func (ed *Editor) RecompileWithPlugins(plugins []editor_plugin.PluginInfo, onCom
 	if err = copyEditorCodeForRecompile(to, project_file_system.EngineFS.EngineFileSystemInterface); err != nil {
 		return err
 	}
-	registry, err := os.OpenFile(filepath.Join(to, "editor_plugin_registry.go"), os.O_APPEND, os.ModePerm)
+	// O_APPEND alone opens the file read-only on macOS/Linux, so every
+	// WriteString below silently fails with "bad file descriptor" and no
+	// plugin imports ever land in the build's editor_plugin_registry.go.
+	// Add O_WRONLY so the appends actually write.
+	registry, err := os.OpenFile(filepath.Join(to, "editor_plugin_registry.go"), os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer registry.Close()
-	registry.WriteString("\nimport (\n")
+	if _, err := registry.WriteString("\nimport (\n"); err != nil {
+		return err
+	}
 	for i := range plugins {
 		if !plugins[i].Config.Enabled {
 			continue
@@ -97,7 +103,9 @@ func (ed *Editor) RecompileWithPlugins(plugins []editor_plugin.PluginInfo, onCom
 				return getErr
 			}
 
-			registry.WriteString(fmt.Sprintf("\t_ \"%s\"\n", modulePath))
+			if _, err := registry.WriteString(fmt.Sprintf("\t_ \"%s\"\n", modulePath)); err != nil {
+				return err
+			}
 			continue
 		}
 		dstName := plugins[i].Config.PackageName
@@ -109,13 +117,17 @@ func (ed *Editor) RecompileWithPlugins(plugins []editor_plugin.PluginInfo, onCom
 		os.Remove(filepath.Join(dst, "go.mod"))
 		os.Remove(filepath.Join(dst, "go.sum"))
 
-		registry.WriteString(fmt.Sprintf("\t_ \"kaijuengine.com/editor/editor_plugin/developer_plugins/%s\"\n", dstName))
+		if _, err := registry.WriteString(fmt.Sprintf("\t_ \"kaijuengine.com/editor/editor_plugin/developer_plugins/%s\"\n", dstName)); err != nil {
+			return err
+		}
 		if err = editor_plugin.UpdatePluginConfigState(plugins[i]); err != nil {
 			slog.Warn("failed to update the enabled state of the plugin",
 				"name", plugins[i].Config.Name, "package", plugins[i].Config.PackageName, "error", err)
 		}
 	}
-	registry.WriteString(")\n")
+	if _, err := registry.WriteString(")\n"); err != nil {
+		return err
+	}
 
 	var cmd *exec.Cmd
 	if build.Debug {

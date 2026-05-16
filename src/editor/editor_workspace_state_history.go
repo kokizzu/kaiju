@@ -38,6 +38,10 @@ package editor
 
 import "kaijuengine.com/platform/profiler/tracing"
 
+// workspaceStateHistory captures a workspace switch for undo/redo. setWorkspaceState
+// already no-ops if the target id is no longer in activeWorkspaces, so an entry
+// pointing at a workspace the user has since disabled silently does nothing
+// rather than panicking.
 type workspaceStateHistory struct {
 	ed   *Editor
 	from WorkspaceState

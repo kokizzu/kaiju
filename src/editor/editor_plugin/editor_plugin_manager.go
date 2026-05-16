@@ -70,10 +70,20 @@ const pluginKey = "https://github.com/KaijuEngine/kaiju"
 
 type Plugin struct {}
 
-func init() { editor.RegisterPlugin(pluginKey, &Plugin{}) }
+func init() {
+	editor.RegisterPlugin(pluginKey, &Plugin{})
+	// To register a workspace tab, also call:
+	//   editor_workspace_registry.Register(&MyWorkspace{})
+	// where MyWorkspace implements editor_workspace.Workspace
+	// (see the built-in workspaces under editor/editor_workspace/* for examples).
+}
 
 func (p *Plugin) Launch(ed editor_plugin.EditorInterface) error {
-	// TODO:  Implement
+	// TODO:  Implement. The ed interface gives you access to the host,
+	// project, settings, events, history, stage view, and workspace
+	// registry. To switch to a different workspace use ed.SelectWorkspace(id),
+	// to query another workspace use ed.Workspace(id) and type-assert to a
+	// well-known interface.
 	return nil
 }
 `

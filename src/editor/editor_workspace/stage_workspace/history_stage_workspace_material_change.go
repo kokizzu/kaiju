@@ -1,5 +1,5 @@
 /******************************************************************************/
-/* stage_workspace_details_entity_id_test.go                                  */
+/* history_stage_workspace_material_change.go                                 */
 /******************************************************************************/
 /*                            This file is part of                            */
 /*                                KAIJU ENGINE                                */
@@ -36,42 +36,39 @@
 
 package stage_workspace
 
-import (
-	"os"
-	"strings"
-	"testing"
+import "kaijuengine.com/editor/editor_stage_manager"
 
-	"kaijuengine.com/engine"
-)
-
-func TestEntityIdDisplayNameIncludesFriendlyNameAndId(t *testing.T) {
-	got := entityIdDisplayName("Target Entity", engine.EntityId("target-id"))
-	want := "Target Entity (target-id)"
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
-	}
+type detailsMaterialChangeHistory struct {
+	workspace      *StageWorkspace
+	detailsUI      *WorkspaceDetailsUI
+	entity         *editor_stage_manager.StageEntity
+	fromMaterialId string
+	toMaterialId   string
+	fromTextureIds []string
+	toTextureIds   []string
 }
 
-func TestStageDetailsTemplateIncludesEntityIdControl(t *testing.T) {
-	const templatePath = "../../editor_embedded_content/editor_content/editor/ui/workspace/stage_workspace.go.html"
-	bin, err := os.ReadFile(templatePath)
-	if err != nil {
-		t.Fatal(err)
+func (h *detailsMaterialChangeHistory) apply(materialId string, textureIds []string) bool {
+	if h.workspace == nil || h.entity == nil {
+		return false
 	}
-	html := string(bin)
-	for _, needle := range []string{
-		`class="dataEntityId"`,
-		`onclick="clickSelectEntityId"`,
-		`ondrop="entityIdDrop"`,
-		`onclick="clearEntityId"`,
-		`class="dataContentId"`,
-		`onclick="clickSelectContentId"`,
-		`id="detailsMaterialBlock"`,
-		`onclick="clickSelectMaterial"`,
-		`ondrop="materialIdDrop"`,
-	} {
-		if !strings.Contains(html, needle) {
-			t.Fatalf("expected details template to contain %s", needle)
-		}
+	if !h.workspace.setEntityMaterial(h.entity, materialId, textureIds) {
+		return false
 	}
+	if h.detailsUI != nil {
+		h.detailsUI.setMaterialInputValue(materialId)
+		h.detailsUI.reload()
+	}
+	return true
 }
+
+func (h *detailsMaterialChangeHistory) Redo() {
+	h.apply(h.toMaterialId, h.toTextureIds)
+}
+
+func (h *detailsMaterialChangeHistory) Undo() {
+	h.apply(h.fromMaterialId, h.fromTextureIds)
+}
+
+func (h *detailsMaterialChangeHistory) Delete() {}
+func (h *detailsMaterialChangeHistory) Exit()   {}

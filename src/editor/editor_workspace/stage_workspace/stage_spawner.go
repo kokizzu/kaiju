@@ -566,6 +566,79 @@ func (w *StageWorkspace) materialForEntity(e *editor_stage_manager.StageEntity) 
 	return mat.CreateInstance(texs), true
 }
 
+func (w *StageWorkspace) setEntityMaterial(e *editor_stage_manager.StageEntity, materialId string, textureIds []string) bool {
+	defer tracing.NewRegion("StageWorkspace.setEntityMaterial").End()
+	if e == nil {
+		return false
+	}
+	loadMaterialId := materialId
+	if loadMaterialId == "" {
+		loadMaterialId = assets.MaterialDefinitionBasic
+	}
+	mat, err := w.Host.MaterialCache().Material(loadMaterialId)
+	if err != nil {
+		slog.Error("failed to find the entity material", "id", loadMaterialId, "error", err)
+		return false
+	}
+	texs := mat.Textures
+	storeTextureIds := make([]string, 0, len(texs))
+	if textureIds != nil {
+		texs = make([]*rendering.Texture, 0, len(textureIds))
+		for _, texId := range textureIds {
+			tex, err := w.Host.TextureCache().Texture(texId, rendering.TextureFilterLinear)
+			if err != nil {
+				slog.Error("failed to find the entity texture", "id", texId, "error", err)
+				return false
+			}
+			texs = append(texs, tex)
+		}
+		storeTextureIds = append(storeTextureIds, textureIds...)
+	}
+	if len(texs) == 0 {
+		tex, err := w.Host.TextureCache().Texture(assets.TextureSquare, rendering.TextureFilterLinear)
+		if err != nil {
+			slog.Error("failed to create the default texture", "error", err)
+			return false
+		}
+		texs = append(texs, tex)
+	}
+	mat = mat.CreateInstance(texs)
+	if textureIds == nil {
+		for _, tex := range mat.Textures {
+			storeTextureIds = append(storeTextureIds, tex.Key)
+		}
+	}
+	if e.StageData.ShaderData != nil {
+		e.StageData.ShaderData.Destroy()
+	}
+	e.StageData.Description.Material = materialId
+	e.StageData.Description.Textures = storeTextureIds
+	if e.StageData.Mesh == nil {
+		e.StageData.ShaderData = nil
+		return true
+	}
+	e.StageData.ShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
+	if !e.IsActive() {
+		e.StageData.ShaderData.Deactivate()
+	}
+	db := entity_data_binding.ToDataBinding("", e.StageData.ShaderData)
+	for i := range db.Fields {
+		if db.RunTagParserOnField(i) {
+			db.SetField(i, db.Fields[i].Value)
+		}
+	}
+	w.Host.Drawings.AddDrawing(rendering.Drawing{
+		Material:   mat,
+		Mesh:       e.StageData.Mesh,
+		ShaderData: e.StageData.ShaderData,
+		Transform:  &e.Transform,
+		ViewCuller: &w.Host.Cameras.Primary,
+	})
+	e.Transform.SetDirty()
+	w.setInitialSkinnedPose(e)
+	return true
+}
+
 func (w *StageWorkspace) spawnParticleSystem(cc *content_database.CachedContent, point matrix.Vec3) {
 	defer tracing.NewRegion("StageWorkspace.spawnParticleSystem").End()
 	w.ed.History().BeginTransaction()

@@ -115,6 +115,8 @@ type WorkspaceDetailsUI struct {
 	detailsMultiSelect         *document.Element
 	detailsMeshBlock           *document.Element
 	detailsMesh                *document.Element
+	detailsMaterialBlock       *document.Element
+	detailsMaterial            *document.Element
 	shaderInstanceData         *document.Element
 	detailsEntityDataTable     *document.Element
 	shaderInstanceDataList     *document.Element
@@ -163,6 +165,10 @@ func (dui *WorkspaceDetailsUI) setupFuncs() map[string]func(*document.Element) {
 		"meshIdDrop":              dui.meshIdDrop,
 		"meshIdDragEnter":         dui.meshIdDragEnter,
 		"meshIdDragExit":          dui.meshIdDragExit,
+		"clickSelectMaterial":     dui.clickSelectMaterial,
+		"materialIdDrop":          dui.materialIdDrop,
+		"materialIdDragEnter":     dui.materialIdDragEnter,
+		"materialIdDragExit":      dui.materialIdDragExit,
 		"clickSelectContentId":    dui.clickSelectContentId,
 		"contentIdDrop":           dui.contentIdDrop,
 		"contentIdDragEnter":      dui.contentIdDragEnter,
@@ -194,6 +200,8 @@ func (dui *WorkspaceDetailsUI) setup(w *StageWorkspace) {
 	dui.detailsMultiSelect, _ = w.Doc.GetElementById("detailsMultiSelect")
 	dui.detailsMeshBlock, _ = w.Doc.GetElementById("detailsMeshBlock")
 	dui.detailsMesh, _ = w.Doc.GetElementById("detailsMesh")
+	dui.detailsMaterialBlock, _ = w.Doc.GetElementById("detailsMaterialBlock")
+	dui.detailsMaterial, _ = w.Doc.GetElementById("detailsMaterial")
 	dui.shaderInstanceData, _ = w.Doc.GetElementById("shaderInstanceData")
 	dui.detailsEntityDataTable, _ = w.Doc.GetElementById("detailsEntityDataTable")
 	dui.shaderInstanceDataList, _ = w.Doc.GetElementById("shaderInstanceDataList")
@@ -543,6 +551,11 @@ func (dui *WorkspaceDetailsUI) createDataBindingEntry(g *entity_data_binding.Ent
 				str := g.FieldString(i)
 				if str == "" {
 					str = fmt.Sprintf("empty (%s)", g.Fields[i].Type)
+				} else {
+					cc, err := dui.workspace.Value().ed.Cache().Read(str)
+					if err == nil {
+						str = cc.Config.Name
+					}
 				}
 				child.InnerLabel().SetText(str)
 			}
@@ -666,6 +679,17 @@ func (dui *WorkspaceDetailsUI) clickSelectMesh(e *document.Element) {
 		}, w.ed.FocusInterface)
 }
 
+func (dui *WorkspaceDetailsUI) clickSelectMaterial(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.clickSelectMaterial").End()
+	w := dui.workspace.Value()
+	w.ed.BlurInterface()
+	content_selector.Show(w.Host, (content_database.Material{}).TypeName(),
+		w.ed.Cache(), func(id string) {
+			w.ed.FocusInterface()
+			dui.changeMaterial(id)
+		}, w.ed.FocusInterface)
+}
+
 func (dui *WorkspaceDetailsUI) clickSelectEntityId(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.selectEntityId").End()
 	w := dui.workspace.Value()
@@ -768,7 +792,25 @@ func (dui *WorkspaceDetailsUI) setMeshInputValue(meshId string) {
 		dui.detailsMesh.InnerLabel().SetText("empty (Mesh)")
 		return
 	}
-	dui.detailsMesh.InnerLabel().SetText(meshId)
+	str := meshId
+	cc, err := dui.workspace.Value().ed.Cache().Read(str)
+	if err == nil {
+		str = cc.Config.Name
+	}
+	dui.detailsMesh.InnerLabel().SetText(str)
+}
+
+func (dui *WorkspaceDetailsUI) setMaterialInputValue(materialId string) {
+	if materialId == "" {
+		dui.detailsMaterial.InnerLabel().SetText("empty (Material)")
+		return
+	}
+	str := materialId
+	cc, err := dui.workspace.Value().ed.Cache().Read(str)
+	if err == nil {
+		str = cc.Config.Name
+	}
+	dui.detailsMaterial.InnerLabel().SetText(str)
 }
 
 func (dui *WorkspaceDetailsUI) entityIdLabel(id engine.EntityId) (string, bool) {
@@ -888,6 +930,47 @@ func (dui *WorkspaceDetailsUI) meshIdDragExit(e *document.Element) {
 	w.Doc.SetElementClasses(e, "dataContentId")
 }
 
+func (dui *WorkspaceDetailsUI) materialIdDrop(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.materialIdDrop").End()
+	w := dui.workspace.Value()
+	w.Doc.SetElementClasses(e, "dataContentId")
+	dd, ok := windowing.DragData().(StageDragContent)
+	if !ok {
+		return
+	}
+	cc, err := w.ed.Cache().Read(dd.id)
+	if err != nil {
+		return
+	}
+	if cc.Config.Type != (content_database.Material{}).TypeName() {
+		return
+	}
+	dui.changeMaterial(cc.Id())
+}
+
+func (dui *WorkspaceDetailsUI) materialIdDragEnter(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.materialIdDragEnter").End()
+	dd, ok := windowing.DragData().(StageDragContent)
+	if !ok {
+		return
+	}
+	w := dui.workspace.Value()
+	cc, err := w.ed.Cache().Read(dd.id)
+	if err != nil {
+		return
+	}
+	if cc.Config.Type != (content_database.Material{}).TypeName() {
+		return
+	}
+	w.Doc.SetElementClasses(e, "dataContentId", "dragHover")
+}
+
+func (dui *WorkspaceDetailsUI) materialIdDragExit(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.materialIdDragExit").End()
+	w := dui.workspace.Value()
+	w.Doc.SetElementClasses(e, "dataContentId")
+}
+
 func (dui *WorkspaceDetailsUI) changeMesh(meshId string) {
 	defer tracing.NewRegion("WorkspaceDetailsUI.changeMesh").End()
 	w := dui.workspace.Value()
@@ -909,6 +992,31 @@ func (dui *WorkspaceDetailsUI) changeMesh(meshId string) {
 	}
 	if h.apply(meshId) {
 		h.toMatId = entity.StageData.Description.Material
+		w.ed.History().Add(h)
+	}
+}
+
+func (dui *WorkspaceDetailsUI) changeMaterial(materialId string) {
+	defer tracing.NewRegion("WorkspaceDetailsUI.changeMaterial").End()
+	w := dui.workspace.Value()
+	sel := w.stageView.Manager().Selection()
+	if len(sel) == 0 {
+		return
+	}
+	entity := sel[0]
+	if entity.StageData.Description.Material == materialId {
+		return
+	}
+	h := &detailsMaterialChangeHistory{
+		workspace:      w,
+		detailsUI:      dui,
+		entity:         entity,
+		fromMaterialId: entity.StageData.Description.Material,
+		toMaterialId:   materialId,
+		fromTextureIds: append([]string{}, entity.StageData.Description.Textures...),
+	}
+	if h.apply(materialId, nil) {
+		h.toTextureIds = append([]string{}, entity.StageData.Description.Textures...)
 		w.ed.History().Add(h)
 	}
 }
@@ -1032,6 +1140,7 @@ func (dui *WorkspaceDetailsUI) reload() {
 		// TODO:  Support multiple objects being selected here
 		dui.detailsMultiSelect.UI.Show()
 		dui.detailsMeshBlock.UI.Hide()
+		dui.detailsMaterialBlock.UI.Hide()
 		dui.shaderInstanceData.UI.Hide()
 		dui.detailsEntityDataTable.UI.Hide()
 		return
@@ -1043,7 +1152,9 @@ func (dui *WorkspaceDetailsUI) reload() {
 	e := sel[len(sel)-1]
 	dui.detailsName.UI.ToInput().SetTextWithoutEvent(e.Name())
 	dui.detailsMeshBlock.UI.Show()
+	dui.detailsMaterialBlock.UI.Show()
 	dui.setMeshInputValue(e.StageData.Description.Mesh)
+	dui.setMaterialInputValue(e.StageData.Description.Material)
 	dui.previousPosition = matrix.Vec3Inf(1)
 	dui.previousRotation = matrix.Vec3Inf(1)
 	dui.previousScale = matrix.Vec3Inf(1)

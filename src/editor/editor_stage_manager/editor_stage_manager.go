@@ -78,6 +78,7 @@ type StageManager struct {
 	OnEntitySelected      events.EventWithArg[*StageEntity]
 	OnEntityDeselected    events.EventWithArg[*StageEntity]
 	OnEntityChangedParent events.EventWithArg[*StageEntity]
+	OnEntityLockChanged   events.EventWithArg[*StageEntity]
 	stageId               string
 	stageName             string
 	host                  *engine.Host
@@ -144,6 +145,18 @@ func (m *StageManager) List() []*StageEntity {
 }
 
 func (m *StageManager) Selection() []*StageEntity { return m.selected }
+
+func (m *StageManager) SetEntityLocked(e *StageEntity, locked bool) {
+	defer tracing.NewRegion("StageManager.SetEntityLocked").End()
+	if e == nil || e.IsDeleted() || e.IsLocked() == locked {
+		return
+	}
+	if locked && m.IsSelected(e) {
+		m.DeselectEntity(e)
+	}
+	e.SetLocked(locked)
+	m.OnEntityLockChanged.Execute(e)
+}
 
 // AddEntity will generate a new entity for the stage with a new random Id. It
 // will internally just call [StageManager.AddEntityWithId].
@@ -389,6 +402,7 @@ func (m *StageManager) entityToTemplate(target *StageEntity) stages.EntityDescri
 func (m *StageManager) entityToDescription(parent *StageEntity) stages.EntityDescription {
 	desc := &parent.StageData.Description
 	desc.Name = parent.Name()
+	desc.Locked = parent.IsLocked()
 	desc.Position = parent.Transform.Position()
 	desc.Rotation = parent.Transform.Rotation()
 	desc.Scale = parent.Transform.Scale()
@@ -646,6 +660,10 @@ func (m *StageManager) importEntityByDescription(host *engine.Host, proj *projec
 	defer tracing.NewRegion("StageManager.importEntityByDescription").End()
 	e := m.AddEntityWithId(desc.Id, desc.Name, matrix.Vec3Zero())
 	e.StageData.Description = *desc
+	e.SetLocked(desc.Locked)
+	if desc.Locked {
+		m.OnEntityLockChanged.Execute(e)
+	}
 	if parent != nil {
 		m.SetEntityParent(e, parent)
 	}

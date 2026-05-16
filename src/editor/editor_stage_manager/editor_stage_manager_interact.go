@@ -87,6 +87,9 @@ func (m *StageManager) ClearSelection() {
 
 func (m *StageManager) SelectEntity(e *StageEntity) {
 	defer tracing.NewRegion("StageManager.SelectEntity").End()
+	if e == nil || e.IsDeleted() || e.IsLocked() {
+		return
+	}
 	for i := range m.selected {
 		if m.selected[i] == e {
 			return
@@ -181,7 +184,7 @@ func (m *StageManager) TryBoxSelect(screenBox matrix.Vec4) {
 	v, p := cam.View(), cam.Projection()
 	viewport := cam.Viewport()
 	for _, e := range m.entities {
-		if e.StageData.Bvh == nil || e.isDeleted {
+		if e.StageData.Bvh == nil || e.isDeleted || e.IsLocked() {
 			continue
 		}
 		b := e.StageData.Bvh.Bounds()
@@ -200,7 +203,7 @@ func (m *StageManager) TryBoxSelect(screenBox matrix.Vec4) {
 
 func (m *StageManager) TryAppendSelect(ray graviton.Ray) (*StageEntity, bool) {
 	defer tracing.NewRegion("StageManager.TryAppendSelect").End()
-	if e, _, ok := m.TryHitEntity(ray); ok {
+	if e, _, ok := m.TryHitEntity(ray); ok && !e.IsLocked() {
 		m.SelectEntity(e)
 		return e, true
 	}
@@ -209,7 +212,7 @@ func (m *StageManager) TryAppendSelect(ray graviton.Ray) (*StageEntity, bool) {
 
 func (m *StageManager) TryToggleSelect(ray graviton.Ray) (*StageEntity, bool) {
 	defer tracing.NewRegion("StageManager.TryToggleSelect").End()
-	if e, _, ok := m.TryHitEntity(ray); ok {
+	if e, _, ok := m.TryHitEntity(ray); ok && !e.IsLocked() {
 		if m.IsSelected(e) {
 			m.DeselectEntity(e)
 		} else {

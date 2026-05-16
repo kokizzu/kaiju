@@ -86,6 +86,7 @@ type EntityDescription struct {
 	Id             string
 	TemplateId     string
 	Name           string
+	Locked         bool
 	Mesh           string
 	Material       string
 	Textures       []string
@@ -102,6 +103,7 @@ type EntityDescriptionJson struct {
 	Id          string
 	TemplateId  string
 	Name        string
+	Locked      bool `json:"omitempty"`
 	Mesh        int
 	Material    int                     `json:"Mat"`
 	Textures    []int                   `json:"Tex,omitempty"`
@@ -182,6 +184,7 @@ func (s *Stage) ToMinimized() StageJson {
 		to.Id = from.Id
 		to.TemplateId = from.TemplateId
 		to.Name = from.Name
+		to.Locked = from.Locked
 		to.Position = from.Position
 		to.Rotation = from.Rotation
 		to.Scale = from.Scale
@@ -216,6 +219,7 @@ func (s *Stage) FromMinimized(ss StageJson) {
 		to.Id = from.Id
 		to.TemplateId = from.TemplateId
 		to.Name = from.Name
+		to.Locked = from.Locked
 		to.Position = from.Position
 		to.Rotation = from.Rotation
 		to.Scale = from.Scale

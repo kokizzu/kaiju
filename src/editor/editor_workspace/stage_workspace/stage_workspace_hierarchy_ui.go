@@ -65,7 +65,11 @@ type WorkspaceHierarchyUI struct {
 const (
 	hierarchyToggleCollapsed = "\ue5df"
 	hierarchyToggleExpanded  = "\ue5c5"
-	hierarchyEntryChildStart = 3
+	hierarchyEyeOpen         = "\ue8f4"
+	hierarchyEyeClosed       = "\ue8f5"
+	hierarchyLockLocked      = "\ue897"
+	hierarchyLockUnlocked    = "\ue898"
+	hierarchyEntryChildStart = 1
 )
 
 func (hui *WorkspaceHierarchyUI) setupFuncs() map[string]func(*document.Element) {
@@ -75,6 +79,7 @@ func (hui *WorkspaceHierarchyUI) setupFuncs() map[string]func(*document.Element)
 		"selectEntity":           hui.selectEntity,
 		"entityToggleChildren":   hui.entityToggleChildren,
 		"entityToggleVisibility": hui.entityToggleVisibility,
+		"entityToggleLock":       hui.entityToggleLock,
 		"entityDragStart":        hui.entityDragStart,
 		"entityDrop":             hui.entityDrop,
 		"entityDragEnter":        hui.entityDragEnter,
@@ -96,6 +101,7 @@ func (hui *WorkspaceHierarchyUI) setup(w *StageWorkspace) {
 	man.OnEntitySelected.Add(hui.entitySelected)
 	man.OnEntityDeselected.Add(hui.entityDeselected)
 	man.OnEntityChangedParent.Add(hui.entityChangedParent)
+	man.OnEntityLockChanged.Add(hui.entityLockChanged)
 }
 
 func (hui *WorkspaceHierarchyUI) open() {
@@ -151,7 +157,7 @@ func (hui *WorkspaceHierarchyUI) selectEntity(e *document.Element) {
 
 func (hui *WorkspaceHierarchyUI) entityToggleChildren(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceHierarchyUI.entityToggleChildren").End()
-	row := e.Parent.Value()
+	row := hierarchyRow(e)
 	if row == nil || row.Attribute("id") == "" || !hui.hasHierarchyChildren(row) {
 		return
 	}
@@ -180,7 +186,11 @@ func (hui *WorkspaceHierarchyUI) textureFromString(key string) *rendering.Textur
 
 func (hui *WorkspaceHierarchyUI) entityToggleVisibility(e *document.Element) {
 	defer tracing.NewRegion("WorkspaceHierarchyUI.entityToggleVisibility").End()
-	id := e.Parent.Value().Attribute("id")
+	row := hierarchyRow(e)
+	if row == nil {
+		return
+	}
+	id := row.Attribute("id")
 	w := hui.workspace.Value()
 	man := w.stageView.Manager()
 	if entity, ok := man.EntityById(id); ok {
@@ -197,6 +207,44 @@ func (hui *WorkspaceHierarchyUI) entityToggleVisibility(e *document.Element) {
 				visible: true,
 			})
 		}
+	}
+}
+
+func (hui *WorkspaceHierarchyUI) entityToggleLock(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.entityToggleLock").End()
+	row := hierarchyRow(e)
+	if row == nil {
+		return
+	}
+	id := row.Attribute("id")
+	w := hui.workspace.Value()
+	man := w.stageView.Manager()
+	entity, ok := man.EntityById(id)
+	if !ok {
+		return
+	}
+	locked := !entity.IsLocked()
+	targets := []*editor_stage_manager.StageEntity{entity}
+	if man.IsSelected(entity) {
+		targets = slices.Clone(man.Selection())
+	}
+	previous := make([]bool, len(targets))
+	for i := range targets {
+		previous[i] = targets[i].IsLocked()
+	}
+	w.ed.History().BeginTransaction()
+	defer w.ed.History().CommitTransaction()
+	if locked && man.IsSelected(entity) {
+		man.ClearSelection()
+	}
+	w.ed.History().Add(&hierarchyEntityChangeLock{
+		manager:  man,
+		entities: targets,
+		previous: previous,
+		locked:   locked,
+	})
+	for i := range targets {
+		man.SetEntityLocked(targets[i], locked)
 	}
 }
 
@@ -313,20 +361,29 @@ func (hui *WorkspaceHierarchyUI) entityCreated(e *editor_stage_manager.StageEnti
 	cpy := w.Doc.DuplicateElement(hui.entityTemplate)
 	w.Doc.SetElementId(cpy, e.StageData.Description.Id)
 	cpy.SetAttribute("data-collapsed", "false")
-	img := cpy.Children[0].UI.ToImage()
-	img.Base().ToPanel().SetUseBlending(true)
+	eye := cpy.Children[0].Children[0].InnerLabel()
+	hui.refreshEntityLock(cpy, e.IsLocked())
 	entryNameLabel(cpy).SetText(e.Name())
 	hui.refreshHierarchyToggle(cpy)
 	activateEvtId := e.OnActivate.Add(func() {
-		img.SetTexture(hui.textureFromString("editor/textures/icons/eye_open.png"))
+		eye.SetText(hierarchyEyeOpen)
 	})
 	deactivateEvtId := e.OnDeactivate.Add(func() {
-		img.SetTexture(hui.textureFromString("editor/textures/icons/eye_closed.png"))
+		eye.SetText(hierarchyEyeClosed)
 	})
-	img.Base().Entity().OnDestroy.Add(func() {
+	eye.Base().Entity().OnDestroy.Add(func() {
 		e.OnActivate.Remove(activateEvtId)
 		e.OnDeactivate.Remove(deactivateEvtId)
 	})
+}
+
+func (hui *WorkspaceHierarchyUI) entityLockChanged(e *editor_stage_manager.StageEntity) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.entityLockChanged").End()
+	if elm, ok := hui.workspace.Value().Doc.GetElementById(e.StageData.Description.Id); ok {
+		hui.refreshEntityLock(elm, e.IsLocked())
+		hui.workspace.Value().Doc.SetElementClasses(
+			elm, hui.buildEntityClasses(elm)...)
+	}
 }
 
 func (hui *WorkspaceHierarchyUI) entityDestroyed(e *editor_stage_manager.StageEntity) {
@@ -437,6 +494,19 @@ func (hui *WorkspaceHierarchyUI) refreshHierarchyToggle(row *document.Element) {
 	}
 }
 
+func (hui *WorkspaceHierarchyUI) refreshEntityLock(row *document.Element, locked bool) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.refreshEntityLock").End()
+	lock := entryLock(row)
+	if lock == nil {
+		return
+	}
+	if locked {
+		lock.InnerLabel().SetText(hierarchyLockLocked)
+	} else {
+		lock.InnerLabel().SetText(hierarchyLockUnlocked)
+	}
+}
+
 func (hui *WorkspaceHierarchyUI) applyChildrenVisibility(row *document.Element) {
 	defer tracing.NewRegion("WorkspaceHierarchyUI.applyChildrenVisibility").End()
 	collapsed := row.Attribute("data-collapsed") == "true"
@@ -489,13 +559,28 @@ func (hui *WorkspaceHierarchyUI) standardHeight() {
 }
 
 func entryToggle(row *document.Element) *document.Element {
-	return row.Children[1]
+	return entryHeader(row).Children[2]
+}
+
+func entryLock(row *document.Element) *document.Element {
+	return entryHeader(row).Children[1]
 }
 
 func entryNameSpan(row *document.Element) *ui.Panel {
-	return row.Children[2].Children[0].UI.ToPanel()
+	return entryHeader(row).Children[3].Children[0].UI.ToPanel()
 }
 
 func entryNameLabel(row *document.Element) *ui.Label {
-	return row.Children[2].Children[0].InnerLabel()
+	return entryHeader(row).Children[3].Children[0].InnerLabel()
+}
+
+func entryHeader(row *document.Element) *document.Element {
+	return row.Children[0]
+}
+
+func hierarchyRow(elm *document.Element) *document.Element {
+	for elm != nil && !elm.HasClass("hierarchyEntry") {
+		elm = elm.Parent.Value()
+	}
+	return elm
 }

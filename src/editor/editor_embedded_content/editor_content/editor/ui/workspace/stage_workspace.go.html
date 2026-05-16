@@ -112,6 +112,12 @@
 				color: white;
 				background-color: #1C1C1C;
 			}
+			.entryHeader {
+				position: relative;
+				width: 100%;
+				height: 24px;
+				overflow: hidden;
+			}
 			.hierarchyEntry:hover {
 				background-color: #313232;
 			}
@@ -131,13 +137,18 @@
 				height: 2em;
 			}
 			.hierarchyEntry img {
+				position: absolute;
 				width: 16px;
 				height: 16px;
-				margin-right: 8px;
+				left: 0;
+				top: 4px;
 			}
 			.hierarchyToggle {
+				position: absolute;
 				width: 16px;
 				height: 24px;
+				left: 40px;
+				top: 0;
 				font-family: 'MaterialIcons-Regular';
 				font-size: 1.2em;
 				text-align: center;
@@ -148,7 +159,24 @@
 			.entryEye { background-color: rgb(200, 200, 200); }
 			.entryEye:hover { background-color: rgb(255, 255, 255); }
 			.entryEye:active { background-color: rgb(200, 200, 200); }
-			.entryName { width: calc(100% - 3em); }
+			.entryActionIcon {
+				width: 16px;
+				height: 24px;
+				top: 0;
+				font-family: 'MaterialIcons-Regular';
+				font-size: 1.2em;
+				text-align: center;
+			}
+			.entryActionIcon:hover { color: #AAA; }
+			.entryName {
+				position: absolute;
+				left: 58px;
+				top: 0;
+				width: calc(100% - 58px);
+				height: 24px;
+				overflow: hidden;
+				word-wrap: unset;
+			}
 			#hierarchyDragPreview {
 				position: absolute;
 				width: 2em;
@@ -354,10 +382,13 @@
 			<input type="text" class="topSearch" placeholder="Search..." onsubmit="hierarchySearch" onchange="hierarchySearch" />
 			<div id="entityList">
 				<div id="entityTemplate" class="hierarchyEntry" onclick="selectEntity" ondragstart="entityDragStart" ondrop="entityDrop" ondragenter="entityDragEnter" ondragleave="entityDragExit">
-					<img class="entryEye" src="editor/textures/icons/eye_open.png" onclick="entityToggleVisibility" />
-					<span class="hierarchyToggle" onclick="entityToggleChildren">&#xE5C5;</span>
-					<div class="entryName">
-						<span>Name...</span>
+					<div class="entryHeader">
+						<span class="entryActionIcon" onclick="entityToggleVisibility">&#xE8F4;</span>
+						<span class="entryActionIcon" onclick="entityToggleLock">&#xE898;</span>
+						<span class="hierarchyToggle" onclick="entityToggleChildren">&#xE5C5;</span>
+						<div class="entryName">
+							<span>Name...</span>
+						</div>
 					</div>
 				</div>
 			</div>

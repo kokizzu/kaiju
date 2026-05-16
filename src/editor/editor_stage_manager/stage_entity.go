@@ -50,6 +50,7 @@ type StageEntity struct {
 	StageData    StageEntityEditorData
 	dataBindings []*entity_data_binding.EntityDataEntry
 	isDeleted    bool
+	isLocked     bool
 }
 
 func EntityToStageEntity(e *engine.Entity) *StageEntity {
@@ -62,6 +63,13 @@ func EntityToStageEntity(e *engine.Entity) *StageEntity {
 func (e *StageEntity) DataBindings() []*entity_data_binding.EntityDataEntry { return e.dataBindings }
 
 func (e *StageEntity) IsDeleted() bool { return e.isDeleted }
+func (e *StageEntity) Lock()           { e.SetLocked(true) }
+func (e *StageEntity) Unlock()         { e.SetLocked(false) }
+func (e *StageEntity) IsLocked() bool  { return e.isLocked }
+func (e *StageEntity) SetLocked(locked bool) {
+	e.isLocked = locked
+	e.StageData.Description.Locked = locked
+}
 
 func (e *StageEntity) DetachDataBinding(binding *entity_data_binding.EntityDataEntry) {
 	for i, b := range e.dataBindings {

@@ -262,19 +262,19 @@ func (ed *Editor) CreateNewLight() {
 }
 
 func (ed *Editor) CreatePrimitive(primitive rendering.PrimitiveMesh) {
-	ed.workspaces.stage.CreatePrimitive(primitive)
+	ed.StageWorkspace().CreatePrimitive(primitive)
 }
 
 func (ed *Editor) ConnectSelectedAsDistanceChain() {
-	ed.workspaces.stage.ConnectSelectedAsDistanceChain()
+	ed.StageWorkspace().ConnectSelectedAsDistanceChain()
 }
 
 func (ed *Editor) ConnectSelectedAsRope() {
-	ed.workspaces.stage.ConnectSelectedAsRope()
+	ed.StageWorkspace().ConnectSelectedAsRope()
 }
 
 func (ed *Editor) ConnectSelectedAsHingeChain() {
-	ed.workspaces.stage.ConnectSelectedAsHingeChain()
+	ed.StageWorkspace().ConnectSelectedAsHingeChain()
 }
 
 func (ed *Editor) CreatePluginProject(path string) {

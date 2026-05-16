@@ -44,6 +44,7 @@ import (
 	"kaijuengine.com/editor/editor_settings"
 	"kaijuengine.com/editor/editor_stage_manager/editor_stage_view"
 	"kaijuengine.com/editor/editor_workspace"
+	"kaijuengine.com/editor/editor_workspace/stage_workspace"
 	"kaijuengine.com/editor/memento"
 	"kaijuengine.com/editor/project"
 	"kaijuengine.com/editor/project/project_database/content_database"
@@ -98,6 +99,18 @@ func (ed *Editor) SelectWorkspace(id string) error {
 func (ed *Editor) Workspace(id string) (editor_workspace.Workspace, bool) {
 	w, ok := ed.activeWorkspaces[id]
 	return w, ok
+}
+
+func (ed *Editor) StageWorkspace() *stage_workspace.StageWorkspace {
+	ws, ok := ed.Workspace("stage")
+	if !ok {
+		panic("stage workspace is missing")
+	}
+	sw, ok := ws.(*stage_workspace.StageWorkspace)
+	if !ok {
+		panic("stage workspace is missing")
+	}
+	return sw
 }
 
 // Workspaces returns the set of currently active (enabled) workspaces in

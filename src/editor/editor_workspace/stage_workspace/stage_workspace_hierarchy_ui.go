@@ -38,6 +38,7 @@ package stage_workspace
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"weak"
 
@@ -61,11 +62,18 @@ type WorkspaceHierarchyUI struct {
 	hierarchyDragPreview *document.Element
 }
 
+const (
+	hierarchyToggleCollapsed = "\ue5df"
+	hierarchyToggleExpanded  = "\ue5c5"
+	hierarchyEntryChildStart = 3
+)
+
 func (hui *WorkspaceHierarchyUI) setupFuncs() map[string]func(*document.Element) {
 	defer tracing.NewRegion("WorkspaceHierarchyUI.setupFuncs").End()
 	return map[string]func(*document.Element){
 		"hierarchySearch":        hui.hierarchySearch,
 		"selectEntity":           hui.selectEntity,
+		"entityToggleChildren":   hui.entityToggleChildren,
 		"entityToggleVisibility": hui.entityToggleVisibility,
 		"entityDragStart":        hui.entityDragStart,
 		"entityDrop":             hui.entityDrop,
@@ -141,6 +149,24 @@ func (hui *WorkspaceHierarchyUI) selectEntity(e *document.Element) {
 	}
 }
 
+func (hui *WorkspaceHierarchyUI) entityToggleChildren(e *document.Element) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.entityToggleChildren").End()
+	row := e.Parent.Value()
+	if row == nil || row.Attribute("id") == "" || !hui.hasHierarchyChildren(row) {
+		return
+	}
+	collapsed := row.Attribute("data-collapsed") == "true"
+	hui.setHierarchyCollapsed(row, !collapsed)
+}
+
+func (hui *WorkspaceHierarchyUI) setHierarchyCollapsed(row *document.Element, collapsed bool) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.setHierarchyCollapsed").End()
+	row.SetAttribute("data-collapsed", strconv.FormatBool(collapsed))
+	hui.refreshHierarchyToggle(row)
+	hui.applyChildrenVisibility(row)
+	hui.entityList.UI.SetDirty(ui.DirtyTypeLayout)
+}
+
 func (hui *WorkspaceHierarchyUI) textureFromString(key string) *rendering.Texture {
 	w := hui.workspace.Value()
 	filter := rendering.TextureFilterLinear
@@ -200,6 +226,7 @@ func (hui *WorkspaceHierarchyUI) entityDragStart(e *document.Element) {
 	for i := range selection {
 		dragData.ids[i] = selection[i].StageData.Description.Id
 	}
+	dragData.ids = klib.AppendUnique(dragData.ids, id)
 	windowing.SetDragData(dragData)
 	windowing.OnDragStop.Add(hui.dragStopped)
 	hui.hierarchyDragPreview.UI.Show()
@@ -285,9 +312,11 @@ func (hui *WorkspaceHierarchyUI) entityCreated(e *editor_stage_manager.StageEnti
 	w := hui.workspace.Value()
 	cpy := w.Doc.DuplicateElement(hui.entityTemplate)
 	w.Doc.SetElementId(cpy, e.StageData.Description.Id)
+	cpy.SetAttribute("data-collapsed", "false")
 	img := cpy.Children[0].UI.ToImage()
 	img.Base().ToPanel().SetUseBlending(true)
 	entryNameLabel(cpy).SetText(e.Name())
+	hui.refreshHierarchyToggle(cpy)
 	activateEvtId := e.OnActivate.Add(func() {
 		img.SetTexture(hui.textureFromString("editor/textures/icons/eye_open.png"))
 	})
@@ -304,7 +333,12 @@ func (hui *WorkspaceHierarchyUI) entityDestroyed(e *editor_stage_manager.StageEn
 	defer tracing.NewRegion("WorkspaceHierarchyUI.entityDestroyed").End()
 	w := hui.workspace.Value()
 	if elm, ok := w.Doc.GetElementById(e.StageData.Description.Id); ok {
+		parent := elm.Parent.Value()
 		hui.workspace.Value().Doc.RemoveElement(elm)
+		if parent != nil && parent != hui.entityList {
+			hui.refreshHierarchyToggle(parent)
+			hui.applyChildrenVisibility(parent)
+		}
 	}
 }
 
@@ -345,6 +379,7 @@ func (hui *WorkspaceHierarchyUI) entityChangedParent(e *editor_stage_manager.Sta
 	if !ok {
 		return
 	}
+	oldParent := child.Parent.Value()
 	p := editor_stage_manager.EntityToStageEntity(e.Parent)
 	var parent *document.Element
 	if p != nil {
@@ -355,9 +390,20 @@ func (hui *WorkspaceHierarchyUI) entityChangedParent(e *editor_stage_manager.Sta
 		parent = hui.entityList
 	}
 	w.Doc.ChangeElementParent(child, parent)
-	if parent != hui.entityList {
-		hui.setIndent(child)
+	hui.setIndent(child)
+	if oldParent != nil && oldParent != hui.entityList {
+		hui.refreshHierarchyToggle(oldParent)
+		hui.applyChildrenVisibility(oldParent)
 	}
+	if parent != hui.entityList {
+		hui.refreshHierarchyToggle(parent)
+		hui.applyChildrenVisibility(parent)
+	} else {
+		child.UI.Show()
+		hui.applyChildrenVisibility(child)
+	}
+	hui.refreshHierarchyToggle(child)
+	hui.entityList.UI.SetDirty(ui.DirtyTypeLayout)
 }
 
 func (hui *WorkspaceHierarchyUI) setIndent(row *document.Element) {
@@ -371,6 +417,40 @@ func (hui *WorkspaceHierarchyUI) setIndent(row *document.Element) {
 		parent = parent.Parent.Value()
 	}
 	entryNameSpan(row).Base().Layout().SetPadding(float32(parentCount*10), 0, 0, 0)
+}
+
+func (hui *WorkspaceHierarchyUI) refreshHierarchyToggle(row *document.Element) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.refreshHierarchyToggle").End()
+	toggle := entryToggle(row)
+	if toggle == nil {
+		return
+	}
+	if !hui.hasHierarchyChildren(row) {
+		row.SetAttribute("data-collapsed", "false")
+		toggle.InnerLabel().SetText("")
+		return
+	}
+	if row.Attribute("data-collapsed") == "true" {
+		toggle.InnerLabel().SetText(hierarchyToggleCollapsed)
+	} else {
+		toggle.InnerLabel().SetText(hierarchyToggleExpanded)
+	}
+}
+
+func (hui *WorkspaceHierarchyUI) applyChildrenVisibility(row *document.Element) {
+	defer tracing.NewRegion("WorkspaceHierarchyUI.applyChildrenVisibility").End()
+	collapsed := row.Attribute("data-collapsed") == "true"
+	for i := hierarchyEntryChildStart; i < len(row.Children); i++ {
+		child := row.Children[i]
+		child.UI.SetVisibility(!collapsed)
+		if !collapsed {
+			hui.applyChildrenVisibility(child)
+		}
+	}
+}
+
+func (hui *WorkspaceHierarchyUI) hasHierarchyChildren(row *document.Element) bool {
+	return len(row.Children) > hierarchyEntryChildStart
 }
 
 func (hui *WorkspaceHierarchyUI) dragStopped() {
@@ -408,10 +488,14 @@ func (hui *WorkspaceHierarchyUI) standardHeight() {
 	hui.workspace.Value().Doc.SetElementClasses(hui.hierarchyArea, "edPanelBg", "sideBarStandard")
 }
 
+func entryToggle(row *document.Element) *document.Element {
+	return row.Children[1]
+}
+
 func entryNameSpan(row *document.Element) *ui.Panel {
-	return row.Children[1].Children[0].UI.ToPanel()
+	return row.Children[2].Children[0].UI.ToPanel()
 }
 
 func entryNameLabel(row *document.Element) *ui.Label {
-	return row.Children[1].Children[0].InnerLabel()
+	return row.Children[2].Children[0].InnerLabel()
 }

@@ -135,10 +135,20 @@
 				height: 16px;
 				margin-right: 8px;
 			}
+			.hierarchyToggle {
+				width: 16px;
+				height: 24px;
+				font-family: 'MaterialIcons-Regular';
+				font-size: 1.2em;
+				text-align: center;
+			}
+			.hierarchyToggle:hover {
+				color: #AAA;
+			}
 			.entryEye { background-color: rgb(200, 200, 200); }
 			.entryEye:hover { background-color: rgb(255, 255, 255); }
 			.entryEye:active { background-color: rgb(200, 200, 200); }
-			.entryName { width: calc(100% - 2em); }
+			.entryName { width: calc(100% - 3em); }
 			#hierarchyDragPreview {
 				position: absolute;
 				width: 2em;
@@ -345,6 +355,7 @@
 			<div id="entityList">
 				<div id="entityTemplate" class="hierarchyEntry" onclick="selectEntity" ondragstart="entityDragStart" ondrop="entityDrop" ondragenter="entityDragEnter" ondragleave="entityDragExit">
 					<img class="entryEye" src="editor/textures/icons/eye_open.png" onclick="entityToggleVisibility" />
+					<span class="hierarchyToggle" onclick="entityToggleChildren">&#xE5C5;</span>
 					<div class="entryName">
 						<span>Name...</span>
 					</div>

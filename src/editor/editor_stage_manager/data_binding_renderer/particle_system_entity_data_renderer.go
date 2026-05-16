@@ -42,6 +42,7 @@ import (
 	"kaijuengine.com/editor/codegen/entity_data_binding"
 	"kaijuengine.com/editor/editor_stage_manager"
 	"kaijuengine.com/engine"
+	"kaijuengine.com/engine_entity_data/content_id"
 	"kaijuengine.com/engine_entity_data/engine_entity_data_particles"
 	"kaijuengine.com/platform/profiler/tracing"
 	"kaijuengine.com/rendering"
@@ -103,13 +104,17 @@ func (c *ParticleSystemEntityDataRenderer) Hide(host *engine.Host, target *edito
 
 func (c *ParticleSystemEntityDataRenderer) Update(host *engine.Host, target *editor_stage_manager.StageEntity, data *entity_data_binding.EntityDataEntry) {
 	if g, ok := c.Systems[target]; ok {
-		id := data.FieldValueByName("Id").(string)
-		if g.id == id && target.Transform.IsDirty() {
+		id, ok := data.FieldValueByName("Id").(content_id.ParticleSystem)
+		if !ok {
+			slog.Error("particle system id failure", "id", id)
 			return
 		}
-		g.id = id
+		if g.id == string(id) && target.Transform.IsDirty() {
+			return
+		}
+		g.id = string(id)
 		g.system.Clear()
-		spec, err := vfx.LoadSpec(host, id)
+		spec, err := vfx.LoadSpec(host, string(id))
 		if err != nil {
 			slog.Error("invlaid particle system id specified", "id", id, "error", err)
 			return

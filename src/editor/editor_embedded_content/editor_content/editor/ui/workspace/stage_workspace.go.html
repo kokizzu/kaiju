@@ -380,6 +380,10 @@
 				<span class="tformY"></span><input id="detailsScaleY" class="tformInput" type="text" placeholder="Y..." onchange="setScaleY" />
 				<span class="tformZ"></span><input id="detailsScaleZ" class="tformInput" type="text" placeholder="Z..." onchange="setScaleZ" />
 				<div id="detailsMultiSelect">Multiple objects selected...</div>
+				<div id="detailsMeshBlock">
+					<div>Mesh</div>
+					<div id="detailsMesh" class="dataContentId" data-type="Mesh" onclick="clickSelectMesh" ondrop="meshIdDrop" ondragenter="meshIdDragEnter" ondragleave="meshIdDragExit">empty &lpar;Mesh&rpar;</div>
+				</div>
 				<div id="shaderInstanceData" class="dataTable">
 					<div id="shaderInstanceDataList">
 						<div id="shaderInstanceDataTemplate" class="dataBindingBlock">

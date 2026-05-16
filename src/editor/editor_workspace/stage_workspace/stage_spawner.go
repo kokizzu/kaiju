@@ -454,6 +454,118 @@ func (w *StageWorkspace) spawnMesh(cc *content_database.CachedContent, point mat
 	w.stageView.Manager().SelectEntity(e)
 }
 
+func (w *StageWorkspace) setEntityMesh(e *editor_stage_manager.StageEntity, meshId string) bool {
+	defer tracing.NewRegion("StageWorkspace.setEntityMesh").End()
+	if e == nil || meshId == "" {
+		return false
+	}
+	km, mesh, ok := w.meshById(meshId)
+	if !ok {
+		return false
+	}
+	mat, ok := w.materialForEntity(e)
+	if !ok {
+		return false
+	}
+	if e.StageData.Description.Material == "" {
+		e.StageData.Description.Material = mat.Id
+	}
+	oldShaderData := e.StageData.ShaderData
+	newShaderData := rendering.ReflectDuplicateDrawInstance(oldShaderData)
+	if newShaderData == nil {
+		newShaderData = shader_data_registry.Create(mat.Shader.ShaderDataName())
+	} else {
+		newShaderData.Base().CancelDestroy()
+	}
+	if oldShaderData != nil {
+		oldShaderData.Destroy()
+	}
+	man := w.stageView.Manager()
+	man.RemoveEntityBVH(e)
+	e.StageData.Mesh = mesh
+	e.StageData.Description.Mesh = meshId
+	e.StageData.Bvh = km.GenerateBVH(w.Host.Threads(), &e.Transform, e)
+	man.AddBVH(e)
+	man.RefitBVH(e)
+	e.StageData.ShaderData = newShaderData
+	if !e.IsActive() {
+		e.StageData.ShaderData.Deactivate()
+	}
+	w.Host.Drawings.AddDrawing(rendering.Drawing{
+		Material:   mat,
+		Mesh:       e.StageData.Mesh,
+		ShaderData: e.StageData.ShaderData,
+		Transform:  &e.Transform,
+		ViewCuller: &w.Host.Cameras.Primary,
+	})
+	w.setInitialSkinnedPose(e)
+	return true
+}
+
+func (w *StageWorkspace) clearEntityMesh(e *editor_stage_manager.StageEntity) bool {
+	defer tracing.NewRegion("StageWorkspace.clearEntityMesh").End()
+	if e == nil || e.StageData.Mesh == nil {
+		return false
+	}
+	if e.StageData.ShaderData != nil {
+		e.StageData.ShaderData.Destroy()
+		e.StageData.ShaderData = nil
+	}
+	w.stageView.Manager().RemoveEntityBVH(e)
+	e.StageData.Bvh = nil
+	e.StageData.Mesh = nil
+	e.StageData.Description.Mesh = ""
+	return true
+}
+
+func (w *StageWorkspace) meshById(meshId string) (kaiju_mesh.KaijuMesh, *rendering.Mesh, bool) {
+	defer tracing.NewRegion("StageWorkspace.meshById").End()
+	km := kaiju_mesh.KaijuMesh{}
+	if verts, indexes, builtIn := rendering.BuiltInMeshData(meshId); builtIn {
+		km.Verts = verts
+		km.Indexes = indexes
+	} else {
+		var err error
+		if km, err = kaiju_mesh.ReadMesh(meshId, w.Host); err != nil {
+			slog.Error("failed to read the mesh for entity", "id", meshId, "error", err)
+			return kaiju_mesh.KaijuMesh{}, nil, false
+		}
+	}
+	mesh := w.Host.MeshCache().Mesh(meshId, km.Verts, km.Indexes)
+	return km, mesh, true
+}
+
+func (w *StageWorkspace) materialForEntity(e *editor_stage_manager.StageEntity) (*rendering.Material, bool) {
+	defer tracing.NewRegion("StageWorkspace.materialForEntity").End()
+	matId := e.StageData.Description.Material
+	if matId == "" {
+		matId = assets.MaterialDefinitionBasic
+	}
+	mat, err := w.Host.MaterialCache().Material(matId)
+	if err != nil {
+		slog.Error("failed to find the entity material", "id", matId, "error", err)
+		return nil, false
+	}
+	texs := make([]*rendering.Texture, 0, len(e.StageData.Description.Textures))
+	for _, texId := range e.StageData.Description.Textures {
+		tex, err := w.Host.TextureCache().Texture(texId, rendering.TextureFilterLinear)
+		if err != nil {
+			slog.Error("failed to find the entity texture", "id", texId, "error", err)
+			continue
+		}
+		texs = append(texs, tex)
+	}
+	if len(texs) == 0 {
+		tex, err := w.Host.TextureCache().Texture(assets.TextureSquare, rendering.TextureFilterLinear)
+		if err != nil {
+			slog.Error("failed to create the default texture", "error", err)
+			return nil, false
+		}
+		texs = append(texs, tex)
+	}
+	return mat.CreateInstance(texs), true
+}
+
 func (w *StageWorkspace) spawnParticleSystem(cc *content_database.CachedContent, point matrix.Vec3) {
 	defer tracing.NewRegion("StageWorkspace.spawnParticleSystem").End()
 	w.ed.History().BeginTransaction()

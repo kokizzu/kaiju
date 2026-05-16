@@ -654,7 +654,9 @@ func (m *StageManager) importEntityByDescription(host *engine.Host, proj *projec
 	e.Transform.SetScale(desc.Scale)
 	// TODO:  Setup all the other data for the entity
 	if desc.Mesh != "" {
-		m.spawnLoadedEntity(e, host, proj.FileSystem())
+		if err := m.spawnLoadedEntity(e, host, proj.FileSystem()); err != nil {
+			desc.Mesh = ""
+		}
 	}
 	for i := range desc.DataBinding {
 		db := &desc.DataBinding[i]
